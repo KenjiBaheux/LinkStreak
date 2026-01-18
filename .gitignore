@@ -1,0 +1,25 @@
+# OS Files
+.DS_Store
+Thumbs.db
+*.log
+
+# Dependencies
+node_modules/
+
+# Local Config
+.env
+.vscode/
+
+# Large Model Files
+models/*.tflite
+models/*.task
+
+# MediaPipe Binaries (WASM/JS)
+mediapipe_wasm/text_wasm_internal.js
+mediapipe_wasm/text_wasm_internal.wasm
+mediapipe_wasm/text_wasm_nosimd_internal.js
+mediapipe_wasm/text_wasm_nosimd_internal.wasm
+
+# Build Artifacts
+dist/
+build/

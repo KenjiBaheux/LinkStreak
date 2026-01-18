@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>LinkStreak Side Panel</title>
+    <link rel="stylesheet" href="ui.css">
+</head>
+
+<body>
+    <div class="search-area" style="position: relative;">
+        <!-- Settings Button: Top Right Absolute -->
+        <button id="open-settings" title="Settings"
+            style="position: absolute; top: -8px; right: 0; background:none; border:none; cursor:pointer; font-size:16px; padding:4px; z-index: 10; opacity: 0.7; transition: opacity 0.2s;">
+            ⚙️
+        </button>
+
+        <div id="ai-status">AI Ready</div>
+        <div id="unified-search-bar" class="search-input-container">
+            <div id="focus-editor" contenteditable="true" spellcheck="false"
+                data-placeholder="Type to search or select text..."></div>
+
+            <div id="context-chip" class="context-chip hidden" title="Click to edit weight/context">
+                <span class="chip-label">Context</span>
+                <button class="chip-remove" title="Remove context">×</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="advanced-context-overlay" class="modal-overlay hidden">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3>Context Settings</h3>
+                <button id="modal-close">×</button>
+            </div>
+            <textarea id="modal-context-edit" spellcheck="false" placeholder="Edit ambient context..."></textarea>
+            <div class="weight-row">
+                <div class="weight-info">
+                    <label>AI Influence</label>
+                    <span id="modal-weight-percent">30%</span>
+                </div>
+                <input type="range" id="modal-weight-slider" min="0" max="100" value="30">
+            </div>
+            <div class="modal-actions">
+                <button id="modal-save" class="btn-primary">Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="results-container" class="results-container">
+        <div class="results-header-group">
+            <h2 class="recommendation-header">Semantic Recommendations</h2>
+            <div class="source-filters">
+                <button class="filter-btn active" data-source="tabs" title="Toggle Open Tabs">Tabs</button>
+                <button class="filter-btn active" data-source="history" title="Toggle History">History</button>
+                <button class="filter-btn active" data-source="bookmarks" title="Toggle Bookmarks">Bookmarks</button>
+
+                <select id="sort-order" class="sort-select" title="Sort by...">
+                    <option value="finalScore">AI Score</option>
+                    <option value="semantic">Semantic</option>
+                    <option value="recency">Recency</option>
+                    <option value="frequency">Frequency</option>
+                </select>
+            </div>
+        </div>
+        <div id="results-list">
+            <div class="empty-state">
+                <div class="empty-icon">🔍</div>
+                <p>Select text on a page to see AI recommendations.</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="resizer"></div>
+
+    <div id="queue-section" class="queue-section">
+        <div class="section-header">
+            <h2 class="queue-header-title">Current Link Streak</h2>
+            <button id="clear-queue" disabled>Reset Streak</button>
+        </div>
+        <div id="queue-list" class="sortable-list">
+        </div>
+        <div id="queue-status-bar">🧊 Empty link streak</div>
+    </div>
+
+    <script src="../modules/storage.js"></script>
+    <script src="../lib/ai_engine.js"></script>
+    <script src="ui_manager.js"></script>
+    <script src="view_controller.js"></script>
+    <script src="sidepanel.js"></script>
+</body>
+
+</html>

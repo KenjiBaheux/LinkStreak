@@ -1,0 +1,65 @@
+{
+    "manifest_version": 3,
+    "name": "LinkStreak",
+    "version": "1.0",
+    "description": "Quickly share relevant links using semantic context matching and built-in AI.",
+    "permissions": [
+        "history",
+        "bookmarks",
+        "tabs",
+        "tabGroups",
+        "scripting",
+        "activeTab",
+        "contextMenus",
+        "sidePanel",
+        "offscreen",
+        "storage"
+    ],
+    "background": {
+        "service_worker": "background.js"
+    },
+    "side_panel": {
+        "default_path": "ui/sidepanel.html"
+    },
+    "action": {},
+    "options_ui": {
+        "page": "ui/settings.html",
+        "open_in_tab": true
+    },
+    "commands": {
+        "_execute_side_panel": {
+            "suggested_key": {
+                "default": "Alt+Shift+L"
+            },
+            "description": "Open the LinkStreak Side Panel"
+        }
+    },
+    "content_scripts": [
+        {
+            "matches": [
+                "<all_urls>"
+            ],
+            "js": [
+                "content.js"
+            ],
+            "run_at": "document_start"
+        }
+    ],
+    "host_permissions": [
+        "<all_urls>"
+    ],
+    "web_accessible_resources": [
+        {
+            "resources": [
+                "models/*",
+                "mediapipe_wasm/*"
+            ],
+            "matches": [
+                "<all_urls>"
+            ]
+        }
+    ],
+    "content_security_policy": {
+        "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+    }
+}
