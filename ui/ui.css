@@ -76,6 +76,9 @@ body {
     font-size: 14px;
     outline: none;
     min-width: 50px;
+    max-height: 130px;
+    overflow-y: auto;
+    resize: vertical;
 }
 
 #focus-editor:empty:before {

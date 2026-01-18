@@ -27,6 +27,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 5. Sidebar Navigation
     setupNavigation();
+
+    // 6. Init Retrieval Options
+    initRetrievalOptions();
 });
 
 // --- Sliders & Ranking ---
@@ -67,6 +70,34 @@ async function updateRanking(category, key, value) {
 
     // Notify Sidepanel
     chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+}
+
+async function initRetrievalOptions() {
+    const opts = await window.LinkyStorage.getRetrievalOptions();
+
+    // Elements
+    const inputHistory = document.getElementById('input-history-max');
+    const checkWindow = document.getElementById('check-tabs-window');
+    const checkPinned = document.getElementById('check-tabs-pinned');
+
+    // Init Values
+    if (inputHistory) inputHistory.value = opts.maxHistoryResults;
+    if (checkWindow) checkWindow.checked = opts.currentWindowLimit;
+    if (checkPinned) checkPinned.checked = opts.ignorePinnedTabs;
+
+    // Listeners
+    const save = async () => {
+        const newOpts = {
+            maxHistoryResults: parseInt(inputHistory.value) || 150,
+            currentWindowLimit: checkWindow.checked,
+            ignorePinnedTabs: checkPinned.checked
+        };
+        await window.LinkyStorage.saveRetrievalOptions(newOpts);
+    };
+
+    if (inputHistory) inputHistory.onchange = save;
+    if (checkWindow) checkWindow.onchange = save;
+    if (checkPinned) checkPinned.onchange = save;
 }
 
 function setupPresets() {

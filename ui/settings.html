@@ -271,12 +271,31 @@
                         <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
                     </div>
 
+                    <div style="margin-bottom: 20px; padding-left: 10px;">
+                        <label
+                            style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
+                            <input type="checkbox" id="check-tabs-window"> Limit to Current Window
+                        </label>
+                        <label
+                            style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
+                            <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
+                        </label>
+                    </div>
+
                     <div class="slider-row">
                         <div class="slider-info">
                             <span class="slider-label" id="label-source-history">Browsing History</span>
                             <span class="slider-value" id="val-source-history">50</span>
                         </div>
                         <input type="range" id="slider-source-history" min="0" max="100" value="50">
+                    </div>
+
+                    <div
+                        style="margin-bottom: 20px; padding-left: 10px; display: flex; align-items: center; justify-content: space-between;">
+                        <label for="input-history-max" style="font-size: 13px; color: var(--text-main);">Max
+                            Results:</label>
+                        <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150"
+                            style="background: var(--bg-input); border: 1px solid var(--border); color: white; padding: 4px; border-radius: 4px; width: 60px; text-align: right;">
                     </div>
 
                     <div class="slider-row">

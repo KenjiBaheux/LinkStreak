@@ -148,6 +148,20 @@ window.LinkyStorage = {
         await chrome.storage.local.set({ pref_ranking_weights: weights });
     },
 
+    async getRetrievalOptions() {
+        const data = await chrome.storage.local.get(['retrievalOptions']);
+        const defaults = {
+            maxHistoryResults: 150,
+            currentWindowLimit: false,
+            ignorePinnedTabs: true
+        };
+        return { ...defaults, ...data.retrievalOptions };
+    },
+
+    async saveRetrievalOptions(options) {
+        await chrome.storage.local.set({ retrievalOptions: options });
+    },
+
     async getMetadataIndex() {
         const data = await chrome.storage.local.get(['linky_vector_cache']);
         return data.linky_vector_cache || {};

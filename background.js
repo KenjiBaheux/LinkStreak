@@ -6,11 +6,23 @@ let lastSelection = null;
 // 1. Unified Message Listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get-browser-data") {
-    Promise.all([
-      chrome.history.search({ text: '', maxResults: 150 }),
-      chrome.tabs.query({ currentWindow: true })
-    ]).then(([history, tabs]) => {
-      sendResponse({ history, tabs });
+    chrome.storage.local.get(['retrievalOptions']).then(data => {
+      const opts = data.retrievalOptions || {
+        maxHistoryResults: 150,
+        currentWindowLimit: false,
+        ignorePinnedTabs: true
+      };
+
+      const tabsQuery = { windowType: 'normal' };
+      if (opts.currentWindowLimit) tabsQuery.currentWindow = true;
+      if (opts.ignorePinnedTabs) tabsQuery.pinned = false;
+
+      Promise.all([
+        chrome.history.search({ text: '', maxResults: opts.maxHistoryResults }),
+        chrome.tabs.query(tabsQuery)
+      ]).then(([history, tabs]) => {
+        sendResponse({ history, tabs: finalTabs });
+      });
     });
     return true; // Keep channel open for async
   }
