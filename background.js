@@ -6,7 +6,7 @@ let lastSelection = null;
 // 1. Unified Message Listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get-browser-data") {
-    chrome.storage.local.get(['retrievalOptions']).then(data => {
+    chrome.storage.local.get(['retrievalOptions']).then(async data => {
       const opts = data.retrievalOptions || {
         maxHistoryResults: 150,
         currentWindowLimit: false,
@@ -17,11 +17,19 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (opts.currentWindowLimit) tabsQuery.currentWindow = true;
       if (opts.ignorePinnedTabs) tabsQuery.pinned = false;
 
+      // Get current active tab to exclude it
+      const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const currentUrl = currentTab?.url;
+
       Promise.all([
         chrome.history.search({ text: '', maxResults: opts.maxHistoryResults }),
         chrome.tabs.query(tabsQuery)
       ]).then(([history, tabs]) => {
-        sendResponse({ history, tabs });
+        // Filter out current tab by ID and matching current URL
+        const filteredTabs = tabs.filter(t => t.id !== currentTab?.id && t.url !== currentUrl);
+        const filteredHistory = history.filter(h => h.url !== currentUrl);
+
+        sendResponse({ history: filteredHistory, tabs: filteredTabs });
       });
     });
     return true; // Keep channel open for async
