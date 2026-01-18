@@ -21,7 +21,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         chrome.history.search({ text: '', maxResults: opts.maxHistoryResults }),
         chrome.tabs.query(tabsQuery)
       ]).then(([history, tabs]) => {
-        sendResponse({ history, tabs: finalTabs });
+        sendResponse({ history, tabs });
       });
     });
     return true; // Keep channel open for async
