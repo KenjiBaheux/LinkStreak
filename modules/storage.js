@@ -88,6 +88,7 @@ window.LinkyStorage = {
         if (!data.ignoredPatterns) {
             const defaults = [
                 'chrome://*',
+                'chrome-extension://*',
                 'edge://*',
                 'about:*',
                 '*google.com/search*',
@@ -173,5 +174,24 @@ window.LinkyStorage = {
             index[url] = { ...index[url], ...newData };
             await chrome.storage.local.set({ linky_vector_cache: index });
         }
+    },
+
+    async getSidepanelUIPrefs() {
+        const data = await chrome.storage.local.get(['sidepanelUIPrefs']);
+        const defaults = {
+            filters: {
+                tabs: true,
+                history: true,
+                bookmarks: true
+            },
+            sortOrder: 'finalScore'
+        };
+        return { ...defaults, ...data.sidepanelUIPrefs };
+    },
+
+    async saveSidepanelUIPrefs(prefs) {
+        const current = await this.getSidepanelUIPrefs();
+        const updated = { ...current, ...prefs };
+        await chrome.storage.local.set({ sidepanelUIPrefs: updated });
     }
 };
