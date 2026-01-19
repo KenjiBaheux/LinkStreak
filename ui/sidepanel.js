@@ -9,9 +9,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 2. Initial Data Load
     const lastData = await chrome.runtime.sendMessage({ action: "get-last-selection" });
     const prefs = await window.LinkyStorage.getSearchPreferences();
+    const uiPrefs = await window.LinkyStorage.getSidepanelUIPrefs();
 
     // Restore persistent weight
     activeContext.weight = prefs.weight;
+
+    // Restore UI Prefs
+    applyUIPrefs(uiPrefs);
 
     if (lastData && lastData.focus) {
         updateUnifiedSearch(lastData.focus, lastData.extra, activeContext.weight);
@@ -23,6 +27,23 @@ document.addEventListener('DOMContentLoaded', async () => {
     LinkyUI.initDragListeners(handleDropReorder);
     LinkyUI.setupResizer();
 });
+
+function applyUIPrefs(uiPrefs) {
+    // 1. Filters
+    const buttons = document.querySelectorAll('.filter-btn');
+    buttons.forEach(btn => {
+        const source = btn.dataset.source;
+        if (uiPrefs.filters && uiPrefs.filters[source] !== undefined) {
+            btn.classList.toggle('active', uiPrefs.filters[source]);
+        }
+    });
+
+    // 2. Sort Order
+    const sortSelect = document.getElementById('sort-order');
+    if (sortSelect && uiPrefs.sortOrder) {
+        sortSelect.value = uiPrefs.sortOrder;
+    }
+}
 
 function setupUnifiedListeners() {
     const editor = document.getElementById('focus-editor');
@@ -84,8 +105,15 @@ function setupUnifiedListeners() {
 function setupSourceFilters() {
     const buttons = document.querySelectorAll('.filter-btn');
     buttons.forEach(btn => {
-        btn.onclick = () => {
+        btn.onclick = async () => {
             btn.classList.toggle('active');
+
+            // Save state
+            const source = btn.dataset.source;
+            const isActive = btn.classList.contains('active');
+            const uiPrefs = await window.LinkyStorage.getSidepanelUIPrefs();
+            uiPrefs.filters[source] = isActive;
+            await window.LinkyStorage.saveSidepanelUIPrefs(uiPrefs);
 
             // Debounced Search
             clearTimeout(window.filterDebounce);
@@ -97,7 +125,12 @@ function setupSourceFilters() {
 
     const sortSelect = document.getElementById('sort-order');
     if (sortSelect) {
-        sortSelect.onchange = () => {
+        sortSelect.onchange = async () => {
+            // Save state
+            const uiPrefs = await window.LinkyStorage.getSidepanelUIPrefs();
+            uiPrefs.sortOrder = sortSelect.value;
+            await window.LinkyStorage.saveSidepanelUIPrefs(uiPrefs);
+
             applySortAndRender();
         };
     }
