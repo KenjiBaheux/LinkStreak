@@ -25,12 +25,209 @@ document.addEventListener('DOMContentLoaded', async () => {
     // 4. Init Presets
     setupPresets();
 
-    // 5. Sidebar Navigation
+    // 5. Navigation
     setupNavigation();
 
     // 6. Init Retrieval Options
     initRetrievalOptions();
+
+    // 7. Link Inspector Initialization
+    initInspector();
 });
+
+// --- Navigation & Tabs ---
+
+function setupNavigation() {
+    // 1. Top-level Tabs (Preferences vs Inspector)
+    const tabLinks = document.querySelectorAll('.settings-nav-item');
+    const tabPanes = document.querySelectorAll('.tab-pane');
+
+    tabLinks.forEach(link => {
+        link.onclick = () => {
+            const targetTab = link.dataset.tab;
+
+            tabLinks.forEach(l => l.classList.toggle('active', l === link));
+            tabPanes.forEach(p => p.classList.toggle('active', p.id === `tab-${targetTab}`));
+
+            if (targetTab === 'inspector') {
+                renderLinkInspector();
+            }
+        };
+    });
+
+    // 2. Sub-navigation (Inside Preferences)
+    const subNavLinks = document.querySelectorAll('.sub-nav-item');
+    subNavLinks.forEach(link => {
+        link.onclick = () => {
+            subNavLinks.forEach(l => l.classList.remove('active'));
+            link.classList.add('active');
+
+            const targetId = link.dataset.target;
+            const targetEl = document.getElementById(targetId);
+            if (targetEl) {
+                targetEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        };
+    });
+}
+
+// --- Link Inspector ---
+
+let inspectorData = {};
+let currentEditingUrl = null;
+
+async function initInspector() {
+    const refreshBtn = document.getElementById('refresh-inspector');
+    const searchInput = document.getElementById('inspector-search');
+    const closeDrawerBtn = document.getElementById('close-drawer');
+    const saveBtn = document.getElementById('save-metadata');
+
+    if (refreshBtn) refreshBtn.onclick = () => renderLinkInspector();
+
+    if (searchInput) {
+        searchInput.oninput = () => {
+            const query = searchInput.value.toLowerCase();
+            renderLinkInspector(query);
+        };
+    }
+
+    if (closeDrawerBtn) {
+        closeDrawerBtn.onclick = () => {
+            document.getElementById('inspector-drawer').classList.add('hidden');
+        };
+    }
+
+    if (saveBtn) {
+        saveBtn.onclick = handleSaveMetadata;
+    }
+}
+
+async function renderLinkInspector(filterQuery = "") {
+    const container = document.getElementById('inspector-body');
+    if (!container) return;
+
+    // Fetch cache from storage
+    const cache = await window.LinkyStorage.getMetadataIndex();
+    inspectorData = cache;
+
+    container.innerHTML = '';
+    const urls = Object.keys(cache).filter(url =>
+        url.toLowerCase().includes(filterQuery) ||
+        (cache[url].title || "").toLowerCase().includes(filterQuery)
+    );
+
+    if (urls.length === 0) {
+        container.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color: var(--text-dim);">No indexed links found matching your query.</td></tr>`;
+        return;
+    }
+
+    urls.forEach(url => {
+        const meta = cache[url];
+        const health = calculateHealth(meta);
+        const statusClass = health.score > 80 ? 'green' : (health.score > 40 ? 'yellow' : 'red');
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td class="col-status"><span class="status-dot ${statusClass}"></span></td>
+            <td class="col-title">${escapeHTML(meta.title || "Untitled")}</td>
+            <td class="col-url">${escapeHTML(url)}</td>
+            <td class="col-health" style="color: var(--accent-${statusClass === 'green' ? 'green' : (statusClass === 'yellow' ? 'cyan' : 'danger')})">${health.score}%</td>
+        `;
+
+        tr.onclick = () => openInspectorDrawer(url, meta);
+        container.appendChild(tr);
+    });
+}
+
+function calculateHealth(meta) {
+    let score = 0;
+    const notes = [];
+
+    // Title Check (max 30)
+    if (meta.title && meta.title.length > 10) {
+        score += 30;
+        notes.push({ type: 'pass', text: 'Good title length' });
+    } else if (meta.title) {
+        score += 15;
+        notes.push({ type: 'warn', text: 'Title is a bit short' });
+    } else {
+        notes.push({ type: 'fail', text: 'Title is missing' });
+    }
+
+    // Description Check (max 40)
+    if (meta.description && meta.description.length > 50) {
+        score += 40;
+        notes.push({ type: 'pass', text: 'Rich meta description' });
+    } else if (meta.description && meta.description.length > 0) {
+        score += 20;
+        notes.push({ type: 'warn', text: 'Description is too brief' });
+    } else {
+        notes.push({ type: 'fail', text: 'Missing description' });
+    }
+
+    // H1 Check (max 30)
+    if (meta.h1 && meta.h1.length > 0) {
+        score += 30;
+        notes.push({ type: 'pass', text: 'H1 header detected' });
+    } else {
+        notes.push({ type: 'warn', text: 'No H1 header found' });
+    }
+
+    return { score, notes };
+}
+
+function openInspectorDrawer(url, meta) {
+    currentEditingUrl = url;
+    const drawer = document.getElementById('inspector-drawer');
+    drawer.classList.remove('hidden');
+
+    document.getElementById('drawer-url').textContent = url;
+    document.getElementById('edit-title').value = meta.title || "";
+    document.getElementById('edit-description').value = meta.description || "";
+    document.getElementById('edit-h1').value = meta.h1 || "";
+
+    const health = calculateHealth(meta);
+    const checklist = document.getElementById('health-checklist');
+    checklist.innerHTML = '';
+
+    health.notes.forEach(note => {
+        const li = document.createElement('li');
+        li.className = 'checklist-item';
+        const icon = note.type === 'pass' ? '✓' : (note.type === 'warn' ? '!' : '✗');
+        li.innerHTML = `
+            <span class="check-icon ${note.type}">${icon}</span>
+            <span>${note.text}</span>
+        `;
+        checklist.appendChild(li);
+    });
+}
+
+async function handleSaveMetadata() {
+    if (!currentEditingUrl) return;
+
+    const newMeta = {
+        title: document.getElementById('edit-title').value,
+        description: document.getElementById('edit-description').value,
+        h1: document.getElementById('edit-h1').value,
+        // Keep the contentHash and embedding if they exist, though re-index will override embedding
+        ...inspectorData[currentEditingUrl]
+    };
+
+    // Update Storage
+    await window.LinkyStorage.updateMetadata(currentEditingUrl, newMeta);
+
+    // Notify Background to Re-Index
+    // We send the full data so background doesn't need to re-fetch/re-parse the page, just re-embed
+    chrome.runtime.sendMessage({
+        action: "reindex-url",
+        url: currentEditingUrl,
+        metadata: newMeta
+    });
+
+    // Refresh UI
+    await renderLinkInspector();
+    document.getElementById('inspector-drawer').classList.add('hidden');
+}
 
 // --- Sliders & Ranking ---
 
@@ -55,6 +252,7 @@ function initSlider(idSuffix, initialValue, onChange) {
 }
 
 function updateLabelStyle(label, value) {
+    if (!label) return;
     if (value === 0) {
         label.classList.add('ignored');
     } else {
@@ -105,27 +303,30 @@ function setupPresets() {
     const btnDiscovery = document.getElementById('preset-discovery');
     const btnBalanced = document.getElementById('preset-balanced');
 
-    btnFreshness.onclick = () => applyPreset({
-        sources: { tabs: 100, history: 40, bookmarks: 20 },
-        signals: { recency: 100, frequency: 30, semantic: 70 }
-    });
+    if (btnFreshness) {
+        btnFreshness.onclick = () => applyPreset({
+            sources: { tabs: 100, history: 40, bookmarks: 20 },
+            signals: { recency: 100, frequency: 30, semantic: 70 }
+        });
+    }
 
-    btnDiscovery.onclick = () => applyPreset({
-        sources: { tabs: 30, history: 100, bookmarks: 80 },
-        signals: { recency: 20, frequency: 50, semantic: 100 }
-    });
+    if (btnDiscovery) {
+        btnDiscovery.onclick = () => applyPreset({
+            sources: { tabs: 30, history: 100, bookmarks: 80 },
+            signals: { recency: 20, frequency: 50, semantic: 100 }
+        });
+    }
 
-    btnBalanced.onclick = () => applyPreset({
-        sources: { tabs: 70, history: 50, bookmarks: 50 },
-        signals: { recency: 80, frequency: 60, semantic: 90 }
-    });
+    if (btnBalanced) {
+        btnBalanced.onclick = () => applyPreset({
+            sources: { tabs: 70, history: 50, bookmarks: 50 },
+            signals: { recency: 80, frequency: 60, semantic: 90 }
+        });
+    }
 }
 
 async function applyPreset(preset) {
     await window.LinkyStorage.saveRankingWeights(preset);
-
-    // Refresh UI
-    const ranking = preset;
 
     // Helper to update UI without triggering save-loops
     const updateUI = (suffix, val) => {
@@ -133,22 +334,21 @@ async function applyPreset(preset) {
         const label = document.getElementById(`label-${suffix}`);
         const valueDisplay = document.getElementById(`val-${suffix}`);
 
-        slider.value = val;
-        valueDisplay.textContent = val;
-        updateLabelStyle(label, val);
+        if (slider) slider.value = val;
+        if (valueDisplay) valueDisplay.textContent = val;
+        if (label) updateLabelStyle(label, val);
     };
 
-    updateUI('source-tabs', ranking.sources.tabs);
-    updateUI('source-history', ranking.sources.history);
-    updateUI('source-bookmarks', ranking.sources.bookmarks);
+    updateUI('source-tabs', preset.sources.tabs);
+    updateUI('source-history', preset.sources.history);
+    updateUI('source-bookmarks', preset.sources.bookmarks);
 
-    updateUI('signal-recency', ranking.signals.recency);
-    updateUI('signal-frequency', ranking.signals.frequency);
-    updateUI('signal-semantic', ranking.signals.semantic);
+    updateUI('signal-recency', preset.signals.recency);
+    updateUI('signal-frequency', preset.signals.frequency);
+    updateUI('signal-semantic', preset.signals.semantic);
 
     chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
 }
-
 
 // --- Pattern Logic ---
 
@@ -156,25 +356,28 @@ function setupPatternInput() {
     const input = document.getElementById('pattern-input');
     const btn = document.getElementById('add-pattern-btn');
 
-    btn.onclick = async () => {
-        const val = input.value.trim();
-        if (!val) return;
+    if (btn) {
+        btn.onclick = async () => {
+            const val = input.value.trim();
+            if (!val) return;
 
-        const patterns = await window.LinkyStorage.getIgnoredPatterns();
-        if (!patterns.includes(val)) {
-            patterns.push(val);
-            await window.LinkyStorage.saveIgnoredPatterns(patterns);
-            renderPatternsList(patterns);
-            input.value = '';
+            const patterns = await window.LinkyStorage.getIgnoredPatterns();
+            if (!patterns.includes(val)) {
+                patterns.push(val);
+                await window.LinkyStorage.saveIgnoredPatterns(patterns);
+                renderPatternsList(patterns);
+                input.value = '';
 
-            // Notify Sidepanel
-            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
-        }
-    };
+                // Notify Sidepanel
+                chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            }
+        };
+    }
 }
 
 function renderPatternsList(patterns) {
     const container = document.getElementById('patterns-list');
+    if (!container) return;
     container.innerHTML = '';
 
     if (patterns.length === 0) {
@@ -210,6 +413,7 @@ function renderPatternsList(patterns) {
 
 function renderIgnoredList(items) {
     const container = document.getElementById('ignored-list');
+    if (!container) return;
     container.innerHTML = '';
 
     if (items.length === 0) {
@@ -218,7 +422,6 @@ function renderIgnoredList(items) {
     }
 
     items.forEach(item => {
-        // Handle migration (if strictly string) or object
         const url = (typeof item === 'string') ? item : item.url;
         const title = (typeof item === 'string') ? 'Unknown Page' : (item.title || 'Unknown Page');
 
@@ -236,12 +439,12 @@ function renderIgnoredList(items) {
             await window.LinkyStorage.restoreIgnoredLink(url);
             div.style.opacity = '0';
             div.style.transform = 'translateX(20px)';
-            setTimeout(() => div.remove(), 300);
-
-            // If empty after remove (check visual children count - 1)
-            if (container.querySelectorAll('.data-item').length <= 1) {
-                container.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">No ignored links.</div>`;
-            }
+            setTimeout(() => {
+                div.remove();
+                if (container.querySelectorAll('.data-item').length === 0) {
+                    container.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">No ignored links.</div>`;
+                }
+            }, 300);
 
             // Notify Sidepanel
             chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
@@ -252,6 +455,7 @@ function renderIgnoredList(items) {
 }
 
 function escapeHTML(str) {
+    if (!str) return "";
     return str.replace(/[&<>'"]/g,
         tag => ({
             '&': '&amp;',
@@ -260,19 +464,4 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag]));
-}
-
-function setupNavigation() {
-    const links = document.querySelectorAll('.settings-nav-item');
-    links.forEach(link => {
-        link.onclick = () => {
-            // UI Toggle
-            links.forEach(l => l.classList.remove('active'));
-            link.classList.add('active');
-
-            // Scroll to section
-            const targetId = link.getAttribute('data-target');
-            document.getElementById(targetId).scrollIntoView({ behavior: 'smooth' });
-        };
-    });
 }

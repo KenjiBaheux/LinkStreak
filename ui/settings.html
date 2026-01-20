@@ -6,7 +6,6 @@
     <title>LinkStreak Settings</title>
     <link rel="stylesheet" href="ui.css">
     <style>
-        /* Settings Specific Overrides */
         body {
             overflow-y: auto;
             padding: 0;
@@ -23,19 +22,23 @@
             width: 240px;
             background: var(--bg-card);
             border-right: 1px solid var(--border);
-            padding: 24px;
+            padding: 24px 0;
+            /* Adjust padding for categories */
             position: fixed;
             top: 0;
             bottom: 0;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
         }
 
         .settings-nav-item {
             display: block;
-            padding: 12px 16px;
+            padding: 12px 24px;
             color: var(--text-dim);
             text-decoration: none;
-            border-radius: 8px;
+            border-radius: 0;
+            /* Sidebar items look better full-width in categories */
             margin-bottom: 4px;
             font-size: 14px;
             font-weight: 500;
@@ -51,6 +54,7 @@
         .settings-nav-item.active {
             background: rgba(34, 211, 238, 0.1);
             color: var(--accent-cyan);
+            border-right: 2px solid var(--accent-cyan);
         }
 
         /* Content */
@@ -58,7 +62,8 @@
             flex: 1;
             margin-left: 240px;
             padding: 40px 60px;
-            max-width: 900px;
+            max-width: 1000px;
+            /* Increased for table */
         }
 
         .settings-section {
@@ -133,20 +138,27 @@
             white-space: nowrap;
         }
 
-        .btn-restore:hover {
-            border-color: var(--accent-green);
-            color: var(--accent-green);
-            background: rgba(74, 222, 128, 0.1);
+        .btn-restore:hover,
+        .btn-refresh:hover {
+            border-color: var(--accent-cyan);
+            color: var(--accent-cyan);
+            background: rgba(34, 211, 238, 0.05);
         }
 
         .btn-primary {
             background: var(--accent-blue);
             color: white;
             border: none;
-            padding: 10px;
+            padding: 12px 24px;
             border-radius: 8px;
             font-weight: 600;
             cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary:hover {
+            background: #2563eb;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
         }
 
         /* Sliders & Ranking Section */
@@ -202,7 +214,7 @@
         input[type=range] {
             width: 100%;
             cursor: pointer;
-            accent-color: var(--accent-blue);
+            accent-color: var(--accent-cyan);
         }
 
         .presets {
@@ -234,6 +246,399 @@
             border-color: var(--accent-cyan);
             color: var(--accent-cyan);
         }
+
+        /* Specific Overrides & New Components */
+        .nav-category {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--text-dim);
+            padding: 0 24px;
+            margin-bottom: 8px;
+        }
+
+        .nav-icon {
+            margin-right: 12px;
+            font-size: 16px;
+        }
+
+        .sidebar-footer {
+            margin-top: auto;
+            padding: 24px;
+            border-top: 1px solid var(--border);
+            font-size: 10px;
+            color: var(--text-dim);
+        }
+
+        /* Content Headers */
+        .content-header {
+            margin-bottom: 32px;
+        }
+
+        .content-header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            margin: 0 0 8px 0;
+            color: var(--text-main);
+        }
+
+        .subtitle {
+            font-size: 14px;
+            color: var(--text-dim);
+            margin: 0;
+        }
+
+        /* Tabs & Panes */
+        .tab-pane {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-pane.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Sub Navigation (Horizontal) */
+        .horizontal-nav {
+            display: flex;
+            gap: 24px;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 32px;
+        }
+
+        .sub-nav-item {
+            padding: 12px 4px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-dim);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .sub-nav-item:hover {
+            color: var(--text-main);
+        }
+
+        .sub-nav-item.active {
+            color: var(--accent-cyan);
+            border-bottom-color: var(--accent-cyan);
+        }
+
+        /* Enhanced Inputs */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 13px;
+            color: var(--text-main);
+            cursor: pointer;
+        }
+
+        .history-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding: 0 10px;
+            font-size: 13px;
+            color: var(--text-dim);
+        }
+
+        .history-options input {
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 6px;
+            border-radius: 6px;
+            width: 70px;
+            text-align: right;
+        }
+
+        .pattern-add-box {
+            display: flex;
+            gap: 12px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .pattern-add-box input {
+            flex: 1;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+        }
+
+        /* Inspector Workspace */
+        .inspector-toolbar {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            gap: 16px;
+        }
+
+        .search-box {
+            flex: 1;
+            position: relative;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            padding: 0 16px;
+        }
+
+        .search-icon {
+            margin-right: 12px;
+            font-size: 14px;
+            opacity: 0.5;
+        }
+
+        .search-box input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 12px 0;
+            outline: none;
+            font-size: 14px;
+        }
+
+        .inspector-table-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            text-align: left;
+        }
+
+        th {
+            background: rgba(0, 0, 0, 0.1);
+            padding: 12px 16px;
+            font-weight: 600;
+            color: var(--text-dim);
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--border);
+            vertical-align: middle;
+            color: var(--text-main);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+            cursor: pointer;
+        }
+
+        .col-status {
+            width: 80px;
+            text-align: center;
+        }
+
+        .col-health {
+            width: 80px;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .col-url {
+            font-family: 'JetBrains Mono', 'Fira Code', monospace;
+            font-size: 11px;
+            opacity: 0.6;
+        }
+
+        /* Status Dots */
+        .status-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+        }
+
+        .status-dot.green {
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        .status-dot.yellow {
+            background: #fbbf24;
+            box-shadow: 0 0 8px #fbbf24;
+        }
+
+        .status-dot.red {
+            background: var(--danger);
+            box-shadow: 0 0 8px var(--danger);
+        }
+
+        /* Drawer */
+        .drawer {
+            position: fixed;
+            top: 0;
+            right: 0;
+            bottom: 0;
+            width: 440px;
+            background: var(--bg-card);
+            border-left: 1px solid var(--border);
+            box-shadow: -20px 0 50px rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            z-index: 1000;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .drawer.hidden {
+            transform: translateX(100%);
+        }
+
+        .drawer-header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .drawer-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--text-main);
+            text-transform: none;
+            letter-spacing: normal;
+        }
+
+        #close-drawer {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 24px;
+            cursor: pointer;
+        }
+
+        .drawer-content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .url-display {
+            font-family: monospace;
+            font-size: 12px;
+            background: var(--bg-input);
+            padding: 12px;
+            border-radius: 8px;
+            color: var(--accent-cyan);
+            margin-bottom: 24px;
+            word-break: break-all;
+        }
+
+        .drawer-section {
+            margin-bottom: 32px;
+        }
+
+        .drawer-section label {
+            display: block;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        .field-label {
+            display: block;
+            font-size: 11px;
+            color: var(--text-dim);
+            margin-bottom: 6px;
+        }
+
+        .code-input {
+            width: 100%;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            color: white;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-family: inherit;
+            line-height: 1.5;
+            outline: none;
+        }
+
+        .code-input:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .checklist {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .checklist-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .check-icon {
+            font-size: 14px;
+        }
+
+        .check-icon.pass {
+            color: var(--accent-green);
+        }
+
+        .check-icon.warn {
+            color: #fbbf24;
+        }
+
+        .check-icon.fail {
+            color: var(--danger);
+        }
+
+        .drawer-footer {
+            padding: 24px;
+            border-top: 1px solid var(--border);
+        }
     </style>
 </head>
 
@@ -241,130 +646,398 @@
     <div class="settings-layout">
         <nav class="settings-sidebar">
             <h2 style="padding: 0 16px; margin-bottom: 24px; color: var(--accent-cyan);">LinkStreak</h2>
-            <a class="settings-nav-item active" data-target="ranking">Ranking & Behavior</a>
-            <a class="settings-nav-item" data-target="patterns">Ignored Patterns</a>
-            <a class="settings-nav-item" data-target="ignored">Ignored Links</a>
+
+            <div class="nav-category">Core settings</div>
+            <a class="settings-nav-item active" data-tab="preferences">
+                <span class="nav-icon">⚙️</span> Preferences
+            </a>
+
+            <div class="nav-category" style="margin-top: 24px;">Debug</div>
+            <a class="settings-nav-item" data-tab="inspector">
+                <span class="nav-icon">🔍</span> Link Inspector
+            </a>
+
+            <div class="sidebar-footer">
+                <div class="version">v1.2.0 Debug</div>
+            </div>
         </nav>
 
         <div class="settings-content">
-
-            <!-- Ranking Section -->
-            <section id="ranking" class="settings-section">
-                <div class="section-title">Ranking Weights</div>
-
-                <!-- Presets -->
-                <div class="presets">
-                    <button class="preset-btn" id="preset-freshness">🌱 Freshness</button>
-                    <button class="preset-btn" id="preset-discovery">🔭 Discovery</button>
-                    <button class="preset-btn" id="preset-balanced">⚖️ Balanced</button>
+            <!-- TAB: PREFERENCES -->
+            <div id="tab-preferences" class="tab-pane active">
+                <div class="content-header">
+                    <h1>Extension Preferences</h1>
+                    <p class="subtitle">Fine-tune ranking logic and data visibility.</p>
                 </div>
 
-                <!-- Sources -->
-                <div class="ranking-group">
-                    <div class="ranking-header">Data Sources</div>
+                <div class="horizontal-nav">
+                    <a class="sub-nav-item active" data-target="ranking">Ranking</a>
+                    <a class="sub-nav-item" data-target="patterns">Patterns</a>
+                    <a class="sub-nav-item" data-target="ignored">Blocklist</a>
+                </div>
 
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-tabs">Active Tabs</span>
-                            <span class="slider-value" id="val-source-tabs">70</span>
+                <!-- Ranking Section -->
+                <section id="ranking" class="settings-section">
+                    <div class="section-title">Ranking Weights</div>
+
+                    <div class="presets">
+                        <button class="preset-btn" id="preset-freshness">🌱 Freshness</button>
+                        <button class="preset-btn" id="preset-discovery">🔭 Discovery</button>
+                        <button class="preset-btn" id="preset-balanced">⚖️ Balanced</button>
+                    </div>
+
+                    <div class="ranking-group">
+                        <div class="ranking-header">Data Sources</div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-tabs">Active Tabs</span>
+                                <span class="slider-value" id="val-source-tabs">70</span>
+                            </div>
+                            <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
                         </div>
-                        <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
-                    </div>
-
-                    <div style="margin-bottom: 20px; padding-left: 10px;">
-                        <label
-                            style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
-                            <input type="checkbox" id="check-tabs-window"> Limit to Current Window
-                        </label>
-                        <label
-                            style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
-                            <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
-                        </label>
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-history">Browsing History</span>
-                            <span class="slider-value" id="val-source-history">50</span>
+                        <div style="margin-bottom: 20px; padding-left: 10px;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-tabs-window"> Limit to Current Window
+                            </label>
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
+                            </label>
                         </div>
-                        <input type="range" id="slider-source-history" min="0" max="100" value="50">
-                    </div>
-
-                    <div
-                        style="margin-bottom: 20px; padding-left: 10px; display: flex; align-items: center; justify-content: space-between;">
-                        <label for="input-history-max" style="font-size: 13px; color: var(--text-main);">Max
-                            Results:</label>
-                        <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150"
-                            style="background: var(--bg-input); border: 1px solid var(--border); color: white; padding: 4px; border-radius: 4px; width: 60px; text-align: right;">
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
-                            <span class="slider-value" id="val-source-bookmarks">50</span>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-history">Browsing History</span>
+                                <span class="slider-value" id="val-source-history">50</span>
+                            </div>
+                            <input type="range" id="slider-source-history" min="0" max="100" value="50">
                         </div>
-                        <input type="range" id="slider-source-bookmarks" min="0" max="100" value="50">
+                        <div class="history-options">
+                            <label for="input-history-max">Max Results:</label>
+                            <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
+                                <span class="slider-value" id="val-source-bookmarks">50</span>
+                            </div>
+                            <input type="range" id="slider-source-bookmarks" min="0" max="100" value="50">
+                        </div>
+                    </div>
+
+                    <div class="ranking-group">
+                        <div class="ranking-header">Behavioral Signals</div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-recency">Recency Bias</span>
+                                <span class="slider-value" id="val-signal-recency">80</span>
+                            </div>
+                            <input type="range" id="slider-signal-recency" min="0" max="100" value="80">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-frequency">Visit Frequency</span>
+                                <span class="slider-value" id="val-signal-frequency">60</span>
+                            </div>
+                            <input type="range" id="slider-signal-frequency" min="0" max="100" value="60">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-semantic">Semantic Depth</span>
+                                <span class="slider-value" id="val-signal-semantic">90</span>
+                            </div>
+                            <input type="range" id="slider-signal-semantic" min="0" max="100" value="90">
+                        </div>
+                    </div>
+                </section>
+
+                <section id="patterns" class="settings-section">
+                    <div class="section-title">Ignored Patterns</div>
+                    <div class="control-group pattern-add-box">
+                        <input type="text" id="pattern-input" placeholder="e.g. *example.com*">
+                        <button id="add-pattern-btn" class="btn-primary">Add</button>
+                    </div>
+                    <div id="patterns-list" class="data-list"></div>
+                </section>
+
+                <section id="ignored" class="settings-section">
+                    <div class="section-title">Ignored Links</div>
+                    <div id="ignored-list" class="data-list">
+                        <div class="empty-state">Loading blocklist...</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB: INSPECTOR -->
+            <div id="tab-inspector" class="tab-pane">
+                <div class="content-header">
+                    <h1>Link Inspector</h1>
+                    <p class="subtitle">Audit and tune metadata for semantic memory.</p>
+                </div>
+
+                <div class="inspector-toolbar">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="inspector-search" placeholder="Filter indexed URLs...">
+                    </div>
+                    <button id="refresh-inspector" class="btn-refresh">Refresh Index</button>
+                </div>
+
+                <div class="inspector-table-container">
+                    <table id="inspector-table">
+                        <thead>
+                            <tr>
+                                <th class="col-status">Status</th>
+                                <th class="col-title">Page Title</th>
+                                <th class="col-url">URL</th>
+                                <th class="col-health">Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inspector-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSPECTOR DRAWER -->
+        <div id="inspector-drawer" class="drawer hidden">
+            <div class="drawer-header">
+                <h2>Audit Details</h2>
+                <button id="close-drawer">×</button>
+            </div>
+            <div class="drawer-content">
+                <div class="url-display" id="drawer-url">https://example.com</div>
+
+                <div class="drawer-section">
+                    <label>Editable Metadata</label>
+                    <div class="form-group">
+                        <span class="field-label">Title</span>
+                        <input type="text" id="edit-title" class="code-input">
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">Description</span>
+                        <textarea id="edit-description" class="code-input" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">H1 Header</span>
+                        <input type="text" id="edit-h1" class="code-input">
                     </div>
                 </div>
 
-                <!-- Signals -->
-                <div class="ranking-group">
-                    <div class="ranking-header">Behavioral Signals</div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-recency">Recency Bias</span>
-                            <span class="slider-value" id="val-signal-recency">80</span>
-                        </div>
-                        <input type="range" id="slider-signal-recency" min="0" max="100" value="80">
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-frequency">Visit Frequency</span>
-                            <span class="slider-value" id="val-signal-frequency">60</span>
-                        </div>
-                        <input type="range" id="slider-signal-frequency" min="0" max="100" value="60">
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-semantic">Semantic Depth</span>
-                            <span class="slider-value" id="val-signal-semantic">90</span>
-                        </div>
-                        <input type="range" id="slider-signal-semantic" min="0" max="100" value="90">
-                    </div>
+                <div class="drawer-section">
+                    <label>Health Audit</label>
+                    <ul id="health-checklist" class="checklist">
+                        <!-- Populated by JS -->
+                    </ul>
                 </div>
-            </section>
 
-            <!-- Ignored Patterns Section -->
-            <section id="patterns" class="settings-section">
-                <div class="section-title">Ignored Patterns</div>
-                <div class="control-group"
-                    style="display: block; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
-                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                        <input type="text" id="pattern-input" placeholder="e.g. *example.com*"
-                            style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px;">
-                        <button id="add-pattern-btn" class="btn-primary" style="width: auto;">Add</button>
-                    </div>
+                <div class="drawer-footer">
+                    <button id="save-metadata" class="btn-primary">Save & Re-Index</button>
                 </div>
-                <div id="patterns-list" class="data-list"></div>
-            </section>
-
-            <!-- Ignored Links Section -->
-            <section id="ignored" class="settings-section">
-                <div class="section-title">Ignored Links</div>
-                <div id="ignored-list" class="data-list">
-                    <div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">
-                        Loading blocklist...
-                    </div>
-                </div>
-            </section>
+            </div>
         </div>
     </div>
+    </style>
+    </head>
 
-    <script src="../modules/storage.js"></script>
-    <script src="settings.js"></script>
-</body>
+    <body>
+        <div class="settings-layout">
+            <nav class="settings-sidebar">
+                <h2 style="padding: 0 16px; margin-bottom: 24px; color: var(--accent-cyan);">LinkStreak</h2>
+
+                <div class="nav-category">Core settings</div>
+                <a class="settings-nav-item active" data-tab="preferences">
+                    <span class="nav-icon">⚙️</span> Preferences
+                </a>
+
+                <div class="nav-category" style="margin-top: 24px;">Debug</div>
+                <a class="settings-nav-item" data-tab="inspector">
+                    <span class="nav-icon">🔍</span> Link Inspector
+                </a>
+
+                <div class="sidebar-footer">
+                    <div class="version">v1.2.0 Debug</div>
+                </div>
+            </nav>
+
+            <div class="settings-content">
+                <!-- TAB: PREFERENCES -->
+                <div id="tab-preferences" class="tab-pane active">
+                    <div class="content-header">
+                        <h1>Extension Preferences</h1>
+                        <p class="subtitle">Fine-tune ranking logic and data visibility.</p>
+                    </div>
+
+                    <div class="horizontal-nav">
+                        <a class="sub-nav-item active" data-target="ranking">Ranking</a>
+                        <a class="sub-nav-item" data-target="patterns">Patterns</a>
+                        <a class="sub-nav-item" data-target="ignored">Blocklist</a>
+                    </div>
+
+                    <!-- Ranking Section -->
+                    <section id="ranking" class="settings-section">
+                        <div class="section-title">Ranking Weights</div>
+
+                        <div class="presets">
+                            <button class="preset-btn" id="preset-freshness">🌱 Freshness</button>
+                            <button class="preset-btn" id="preset-discovery">🔭 Discovery</button>
+                            <button class="preset-btn" id="preset-balanced">⚖️ Balanced</button>
+                        </div>
+
+                        <div class="ranking-group">
+                            <div class="ranking-header">Data Sources</div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-source-tabs">Active Tabs</span>
+                                    <span class="slider-value" id="val-source-tabs">70</span>
+                                </div>
+                                <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
+                            </div>
+                            <div style="margin-bottom: 20px; padding-left: 10px;">
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="check-tabs-window"> Limit to Current Window
+                                </label>
+                                <label class="checkbox-container">
+                                    <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
+                                </label>
+                            </div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-source-history">Browsing History</span>
+                                    <span class="slider-value" id="val-source-history">50</span>
+                                </div>
+                                <input type="range" id="slider-source-history" min="0" max="100" value="50">
+                            </div>
+                            <div class="history-options">
+                                <label for="input-history-max">Max Results:</label>
+                                <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150">
+                            </div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
+                                    <span class="slider-value" id="val-source-bookmarks">50</span>
+                                </div>
+                                <input type="range" id="slider-source-bookmarks" min="0" max="100" value="50">
+                            </div>
+                        </div>
+
+                        <div class="ranking-group">
+                            <div class="ranking-header">Behavioral Signals</div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-signal-recency">Recency Bias</span>
+                                    <span class="slider-value" id="val-signal-recency">80</span>
+                                </div>
+                                <input type="range" id="slider-signal-recency" min="0" max="100" value="80">
+                            </div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-signal-frequency">Visit Frequency</span>
+                                    <span class="slider-value" id="val-signal-frequency">60</span>
+                                </div>
+                                <input type="range" id="slider-signal-frequency" min="0" max="100" value="60">
+                            </div>
+                            <div class="slider-row">
+                                <div class="slider-info">
+                                    <span class="slider-label" id="label-signal-semantic">Semantic Depth</span>
+                                    <span class="slider-value" id="val-signal-semantic">90</span>
+                                </div>
+                                <input type="range" id="slider-signal-semantic" min="0" max="100" value="90">
+                            </div>
+                        </div>
+                    </section>
+
+                    <section id="patterns" class="settings-section">
+                        <div class="section-title">Ignored Patterns</div>
+                        <div class="control-group pattern-add-box">
+                            <input type="text" id="pattern-input" placeholder="e.g. *example.com*">
+                            <button id="add-pattern-btn" class="btn-primary">Add</button>
+                        </div>
+                        <div id="patterns-list" class="data-list"></div>
+                    </section>
+
+                    <section id="ignored" class="settings-section">
+                        <div class="section-title">Ignored Links</div>
+                        <div id="ignored-list" class="data-list">
+                            <div class="empty-state">Loading blocklist...</div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- TAB: INSPECTOR -->
+                <div id="tab-inspector" class="tab-pane">
+                    <div class="content-header">
+                        <h1>Link Inspector</h1>
+                        <p class="subtitle">Audit and tune metadata for semantic memory.</p>
+                    </div>
+
+                    <div class="inspector-toolbar">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input type="text" id="inspector-search" placeholder="Filter indexed URLs...">
+                        </div>
+                        <button id="refresh-inspector" class="btn-refresh">Refresh Index</button>
+                    </div>
+
+                    <div class="inspector-table-container">
+                        <table id="inspector-table">
+                            <thead>
+                                <tr>
+                                    <th class="col-status">Status</th>
+                                    <th class="col-title">Page Title</th>
+                                    <th class="col-url">URL</th>
+                                    <th class="col-health">Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inspector-body">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- INSPECTOR DRAWER -->
+            <div id="inspector-drawer" class="drawer hidden">
+                <div class="drawer-header">
+                    <h2>Audit Details</h2>
+                    <button id="close-drawer">×</button>
+                </div>
+                <div class="drawer-content">
+                    <div class="url-display" id="drawer-url">https://example.com</div>
+
+                    <div class="drawer-section">
+                        <label>Editable Metadata</label>
+                        <div class="form-group">
+                            <span class="field-label">Title</span>
+                            <input type="text" id="edit-title" class="code-input">
+                        </div>
+                        <div class="form-group">
+                            <span class="field-label">Description</span>
+                            <textarea id="edit-description" class="code-input" rows="3"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <span class="field-label">H1 Header</span>
+                            <input type="text" id="edit-h1" class="code-input">
+                        </div>
+                    </div>
+
+                    <div class="drawer-section">
+                        <label>Health Audit</label>
+                        <ul id="health-checklist" class="checklist">
+                            <!-- Populated by JS -->
+                        </ul>
+                    </div>
+
+                    <div class="drawer-footer">
+                        <button id="save-metadata" class="btn-primary">Save & Re-Index</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script src="../modules/storage.js"></script>
+        <script src="settings.js"></script>
+    </body>
 
 </html>

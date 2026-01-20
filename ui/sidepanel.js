@@ -354,8 +354,34 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 triggerUnifiedSearch();
             }, 750);
             break;
+        case "index-new-page":
+            handlePageIndexing(request);
+            break;
+        case "reindex-url":
+            handleReindexRequest(request);
+            break;
     }
 });
+
+async function handleReindexRequest(request) {
+    if (!window.linkyAIEngine) return;
+
+    const embedding = await window.linkyAIEngine.getEmbedding({
+        title: request.metadata.title,
+        description: request.metadata.description,
+        h1: request.metadata.h1
+    });
+
+    if (embedding) {
+        chrome.runtime.sendMessage({
+            action: "cache-embedding",
+            url: request.url,
+            title: request.metadata.title,
+            embedding: embedding,
+            description: request.metadata.description
+        });
+    }
+}
 
 async function handleAddToQueue(link) {
     const currentQueue = await window.LinkyStorage.getQueue();
