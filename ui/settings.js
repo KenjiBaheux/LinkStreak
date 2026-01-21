@@ -33,7 +33,40 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 7. Link Inspector Initialization
     initInspector();
+
+    // 8. Handle Deep Links
+    handleDeepLink();
 });
+
+function handleDeepLink() {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const query = params.get('query');
+
+    if (tab === 'inspector') {
+        const tabLinks = document.querySelectorAll('.settings-nav-item');
+        const tabPanes = document.querySelectorAll('.tab-pane');
+        const inspectorLink = Array.from(tabLinks).find(l => l.dataset.tab === 'inspector');
+
+        if (inspectorLink) {
+            tabLinks.forEach(l => l.classList.toggle('active', l === inspectorLink));
+            tabPanes.forEach(p => p.classList.toggle('active', p.id === 'tab-inspector'));
+
+            // Populate search if provided
+            if (query) {
+                const searchInput = document.getElementById('inspector-search');
+                if (searchInput) {
+                    // Prepend url: if no qualifier present to ensure precise matching for deep links
+                    const finalQuery = (query.includes(':')) ? query : `url:${query}`;
+                    searchInput.value = finalQuery;
+                    renderLinkInspector(finalQuery.toLowerCase());
+                }
+            } else {
+                renderLinkInspector();
+            }
+        }
+    }
+}
 
 // --- Navigation & Tabs ---
 
@@ -97,6 +130,14 @@ async function initInspector() {
         };
     }
 
+    const showIgnoredToggle = document.getElementById('show-ignored-toggle');
+    if (showIgnoredToggle) {
+        showIgnoredToggle.onchange = () => {
+            const searchInput = document.getElementById('inspector-search');
+            renderLinkInspector(searchInput?.value.toLowerCase() || "");
+        };
+    }
+
     if (saveBtn) {
         saveBtn.onclick = handleSaveMetadata;
     }
@@ -106,32 +147,75 @@ async function renderLinkInspector(filterQuery = "") {
     const container = document.getElementById('inspector-body');
     if (!container) return;
 
-    // Fetch cache from storage
+    // Fetch cache and patterns
     const cache = await window.LinkyStorage.getMetadataIndex();
+    const showIgnored = document.getElementById('show-ignored-toggle')?.checked || false;
     inspectorData = cache;
 
     container.innerHTML = '';
-    const urls = Object.keys(cache).filter(url =>
-        url.toLowerCase().includes(filterQuery) ||
-        (cache[url].title || "").toLowerCase().includes(filterQuery)
-    );
 
-    if (urls.length === 0) {
+    // Filter and collect valid URLs
+    const filteredUrls = [];
+    const query = filterQuery.trim().toLowerCase();
+
+    for (const url of Object.keys(cache)) {
+        let isMatch = false;
+        const meta = cache[url];
+        const title = (meta.title || "").toLowerCase();
+        const description = (meta.description || "").toLowerCase();
+        const h1 = (meta.h1 || "").toLowerCase();
+        const lowUrl = url.toLowerCase();
+
+        if (!query) {
+            isMatch = true;
+        } else if (query.startsWith('url:')) {
+            isMatch = lowUrl.includes(query.replace('url:', '').trim());
+        } else if (query.startsWith('title:')) {
+            isMatch = title.includes(query.replace('title:', '').trim());
+        } else if (query.startsWith('desc:') || query.startsWith('description:')) {
+            const term = query.startsWith('desc:') ? query.replace('desc:', '') : query.replace('description:', '');
+            isMatch = description.includes(term.trim());
+        } else if (query.startsWith('h1:')) {
+            isMatch = h1.includes(query.replace('h1:', '').trim());
+        } else {
+            // General matching against all fields
+            isMatch = lowUrl.includes(query) ||
+                title.includes(query) ||
+                description.includes(query) ||
+                h1.includes(query);
+        }
+
+        if (!isMatch) continue;
+
+        const isIgnored = await window.LinkyStorage.isUrlIgnored(url);
+        if (isIgnored && !showIgnored) continue;
+
+        filteredUrls.push({ url, isIgnored });
+    }
+
+    if (filteredUrls.length === 0) {
         container.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color: var(--text-dim);">No indexed links found matching your query.</td></tr>`;
         return;
     }
 
-    urls.forEach(url => {
+    filteredUrls.forEach(({ url, isIgnored }) => {
         const meta = cache[url];
         const health = calculateHealth(meta);
-        const statusClass = health.score > 80 ? 'green' : (health.score > 40 ? 'yellow' : 'red');
+        const statusClass = isIgnored ? 'ignored-status' : (health.score > 80 ? 'green' : (health.score > 40 ? 'yellow' : 'red'));
 
         const tr = document.createElement('tr');
+        if (isIgnored) tr.classList.add('row-ignored');
+
         tr.innerHTML = `
             <td class="col-status"><span class="status-dot ${statusClass}"></span></td>
-            <td class="col-title">${escapeHTML(meta.title || "Untitled")}</td>
+            <td class="col-title">
+                ${isIgnored ? '<span class="label-ignored">IGNORED</span> ' : ''}
+                ${escapeHTML(meta.title || "Untitled")}
+            </td>
             <td class="col-url">${escapeHTML(url)}</td>
-            <td class="col-health" style="color: var(--accent-${statusClass === 'green' ? 'green' : (statusClass === 'yellow' ? 'cyan' : 'danger')})">${health.score}%</td>
+            <td class="col-health" style="color: ${isIgnored ? 'var(--text-dim)' : (statusClass === 'green' ? 'var(--accent-green)' : (statusClass === 'yellow' ? '#fbbf24' : 'var(--danger)'))}">
+                ${isIgnored ? '--' : health.score + '%'}
+            </td>
         `;
 
         tr.onclick = () => openInspectorDrawer(url, meta);
