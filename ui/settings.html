@@ -5,364 +5,255 @@
     <meta charset="UTF-8">
     <title>LinkStreak Settings</title>
     <link rel="stylesheet" href="ui.css">
-    <style>
-        /* Settings Specific Overrides */
-        body {
-            overflow-y: auto;
-            padding: 0;
-            background: var(--bg-dark);
-        }
-
-        .settings-layout {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .settings-sidebar {
-            width: 240px;
-            background: var(--bg-card);
-            border-right: 1px solid var(--border);
-            padding: 24px;
-            position: fixed;
-            top: 0;
-            bottom: 0;
-            overflow-y: auto;
-        }
-
-        .settings-nav-item {
-            display: block;
-            padding: 12px 16px;
-            color: var(--text-dim);
-            text-decoration: none;
-            border-radius: 8px;
-            margin-bottom: 4px;
-            font-size: 14px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all var(--transition);
-        }
-
-        .settings-nav-item:hover {
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--text-main);
-        }
-
-        .settings-nav-item.active {
-            background: rgba(34, 211, 238, 0.1);
-            color: var(--accent-cyan);
-        }
-
-        /* Content */
-        .settings-content {
-            flex: 1;
-            margin-left: 240px;
-            padding: 40px 60px;
-            max-width: 900px;
-        }
-
-        .settings-section {
-            margin-bottom: 60px;
-            scroll-margin-top: 40px;
-        }
-
-        .section-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: var(--text-main);
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid var(--border);
-        }
-
-        /* Lists (Ignored Links / Metadata) */
-        .data-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            max-height: 400px;
-            overflow-y: auto;
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            padding: 8px;
-            background: rgba(0, 0, 0, 0.2);
-        }
-
-        .data-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 12px 16px;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-        }
-
-        .data-info {
-            min-width: 0;
-            margin-right: 16px;
-        }
-
-        .data-title {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-main);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .data-url {
-            font-size: 11px;
-            color: var(--text-dim);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        .btn-restore,
-        .btn-refresh {
-            padding: 6px 12px;
-            border-radius: 6px;
-            border: 1px solid var(--border);
-            background: transparent;
-            color: var(--text-main);
-            font-size: 12px;
-            cursor: pointer;
-            transition: all 0.2s;
-            white-space: nowrap;
-        }
-
-        .btn-restore:hover {
-            border-color: var(--accent-green);
-            color: var(--accent-green);
-            background: rgba(74, 222, 128, 0.1);
-        }
-
-        .btn-primary {
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        /* Sliders & Ranking Section */
-        .ranking-group {
-            background: var(--bg-card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 24px;
-            margin-bottom: 24px;
-        }
-
-        .ranking-header {
-            font-size: 14px;
-            font-weight: 600;
-            color: var(--accent-cyan);
-            margin-bottom: 16px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .slider-row {
-            margin-bottom: 20px;
-        }
-
-        .slider-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .slider-info {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 8px;
-        }
-
-        .slider-label {
-            font-size: 13px;
-            font-weight: 500;
-            color: var(--text-main);
-            transition: color 0.2s;
-        }
-
-        .slider-label.ignored {
-            color: var(--text-dim);
-            text-decoration: line-through;
-        }
-
-        .slider-value {
-            font-size: 13px;
-            font-weight: bold;
-            color: var(--accent-blue);
-        }
-
-        input[type=range] {
-            width: 100%;
-            cursor: pointer;
-            accent-color: var(--accent-blue);
-        }
-
-        .presets {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-
-        .preset-btn {
-            flex: 1;
-            background: var(--bg-input);
-            border: 1px solid var(--border);
-            color: var(--text-dim);
-            padding: 10px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 13px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .preset-btn:hover {
-            border-color: var(--accent-cyan);
-            color: var(--text-main);
-        }
-
-        .preset-btn.active {
-            background: rgba(34, 211, 238, 0.1);
-            border-color: var(--accent-cyan);
-            color: var(--accent-cyan);
-        }
-    </style>
+    <link rel="stylesheet" href="settings-layout.css">
+    <link rel="stylesheet" href="settings-components.css">
+    <link rel="stylesheet" href="inspector.css">
 </head>
 
 <body>
     <div class="settings-layout">
         <nav class="settings-sidebar">
             <h2 style="padding: 0 16px; margin-bottom: 24px; color: var(--accent-cyan);">LinkStreak</h2>
-            <a class="settings-nav-item active" data-target="ranking">Ranking & Behavior</a>
-            <a class="settings-nav-item" data-target="patterns">Ignored Patterns</a>
-            <a class="settings-nav-item" data-target="ignored">Ignored Links</a>
+
+            <div class="nav-category">Core settings</div>
+            <a class="settings-nav-item active" data-tab="preferences">
+                <span class="nav-icon">⚙️</span> Preferences
+            </a>
+
+            <div class="nav-category" style="margin-top: 24px;">Debug</div>
+            <a class="settings-nav-item" data-tab="inspector">
+                <span class="nav-icon">🔍</span> Link Inspector
+            </a>
+
+            <div class="sidebar-footer">
+                <div class="version">v1.2.0 Debug</div>
+            </div>
         </nav>
 
         <div class="settings-content">
-
-            <!-- Ranking Section -->
-            <section id="ranking" class="settings-section">
-                <div class="section-title">Ranking Weights</div>
-
-                <!-- Presets -->
-                <div class="presets">
-                    <button class="preset-btn" id="preset-freshness">🌱 Freshness</button>
-                    <button class="preset-btn" id="preset-discovery">🔭 Discovery</button>
-                    <button class="preset-btn" id="preset-balanced">⚖️ Balanced</button>
+            <!-- TAB: PREFERENCES -->
+            <div id="tab-preferences" class="tab-pane active">
+                <div class="content-header">
+                    <h1>Extension Preferences</h1>
+                    <p class="subtitle">Fine-tune ranking logic and data visibility.</p>
                 </div>
 
-                <!-- Sources -->
-                <div class="ranking-group">
-                    <div class="ranking-header">Data Sources</div>
+                <div class="horizontal-nav">
+                    <a class="sub-nav-item active" data-target="ranking">Ranking</a>
+                    <a class="sub-nav-item" data-target="patterns">Patterns</a>
+                    <a class="sub-nav-item" data-target="ignored">Blocklist</a>
+                </div>
 
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-tabs">Active Tabs</span>
-                            <span class="slider-value" id="val-source-tabs">70</span>
+                <!-- Ranking Section -->
+                <section id="ranking" class="settings-section">
+                    <div class="section-title">Ranking Weights</div>
+
+                    <div class="presets">
+                        <button class="preset-btn" id="preset-freshness">🌱 Freshness</button>
+                        <button class="preset-btn" id="preset-discovery">🔭 Discovery</button>
+                        <button class="preset-btn" id="preset-balanced">⚖️ Balanced</button>
+                    </div>
+
+                    <div class="ranking-group">
+                        <div class="ranking-header">Data Sources</div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-tabs">Active Tabs</span>
+                                <span class="slider-value" id="val-source-tabs">70</span>
+                            </div>
+                            <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
                         </div>
-                        <input type="range" id="slider-source-tabs" min="0" max="100" value="70">
-                    </div>
-
-                    <div style="margin-bottom: 20px; padding-left: 10px;">
-                        <label
-                            style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
-                            <input type="checkbox" id="check-tabs-window"> Limit to Current Window
-                        </label>
-                        <label
-                            style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-main); cursor: pointer;">
-                            <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
-                        </label>
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-history">Browsing History</span>
-                            <span class="slider-value" id="val-source-history">50</span>
+                        <div style="margin-bottom: 20px; padding-left: 10px;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-tabs-window"> Limit to Current Window
+                            </label>
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-tabs-pinned"> Ignore Pinned Tabs
+                            </label>
                         </div>
-                        <input type="range" id="slider-source-history" min="0" max="100" value="50">
-                    </div>
-
-                    <div
-                        style="margin-bottom: 20px; padding-left: 10px; display: flex; align-items: center; justify-content: space-between;">
-                        <label for="input-history-max" style="font-size: 13px; color: var(--text-main);">Max
-                            Results:</label>
-                        <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150"
-                            style="background: var(--bg-input); border: 1px solid var(--border); color: white; padding: 4px; border-radius: 4px; width: 60px; text-align: right;">
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
-                            <span class="slider-value" id="val-source-bookmarks">50</span>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-history">Browsing History</span>
+                                <span class="slider-value" id="val-source-history">50</span>
+                            </div>
+                            <input type="range" id="slider-source-history" min="0" max="100" value="50">
                         </div>
-                        <input type="range" id="slider-source-bookmarks" min="0" max="100" value="50">
+                        <div class="history-options">
+                            <label for="input-history-max">Max Results:</label>
+                            <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150">
+                        </div>
+                        <div style="margin-bottom: 20px; padding-left: 10px;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-history-local"> Local History Only
+                            </label>
+                            <p class="field-subtext"
+                                style="font-size: 11px; margin-top: -6px; margin-left: 24px; color: var(--text-dim);">
+                                Ignore links synced from your phone or other computers.
+                            </p>
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
+                                <span class="slider-value" id="val-source-bookmarks">50</span>
+                            </div>
+                            <input type="range" id="slider-source-bookmarks" min="0" max="100" value="50">
+                        </div>
+                    </div>
+
+                    <div class="ranking-group">
+                        <div class="ranking-header">Behavioral Signals</div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-recency">Recency Bias</span>
+                                <span class="slider-value" id="val-signal-recency">80</span>
+                            </div>
+                            <input type="range" id="slider-signal-recency" min="0" max="100" value="80">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-frequency">Visit Frequency</span>
+                                <span class="slider-value" id="val-signal-frequency">60</span>
+                            </div>
+                            <input type="range" id="slider-signal-frequency" min="0" max="100" value="60">
+                        </div>
+                        <div class="slider-row">
+                            <div class="slider-info">
+                                <span class="slider-label" id="label-signal-semantic">Semantic Depth</span>
+                                <span class="slider-value" id="val-signal-semantic">90</span>
+                            </div>
+                            <input type="range" id="slider-signal-semantic" min="0" max="100" value="90">
+                        </div>
+                    </div>
+                </section>
+
+                <section id="patterns" class="settings-section">
+                    <div class="section-title">Ignored Patterns</div>
+                    <div class="control-group pattern-add-box">
+                        <input type="text" id="pattern-input" placeholder="e.g. *example.com*">
+                        <button id="add-pattern-btn" class="btn-primary">Add</button>
+                    </div>
+                    <div id="patterns-list" class="data-list"></div>
+                </section>
+
+                <section id="ignored" class="settings-section">
+                    <div class="section-title">Ignored Links</div>
+                    <div id="ignored-list" class="data-list">
+                        <div class="empty-state">Loading blocklist...</div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- TAB: INSPECTOR -->
+            <div id="tab-inspector" class="tab-pane">
+                <div class="content-header">
+                    <h1>Link Inspector</h1>
+                    <p class="subtitle">Audit and tune metadata for semantic memory.</p>
+                </div>
+
+                <div class="inspector-toolbar">
+                    <div class="search-box">
+                        <span class="search-icon">🔍</span>
+                        <input type="text" id="inspector-search"
+                            placeholder="Filter by title, url:domain, or h1:target...">
+                    </div>
+                    <label class="checkbox-container"
+                        style="margin: 0; white-space: nowrap; font-size: 12px; color: var(--text-dim);">
+                        <input type="checkbox" id="show-ignored-toggle"> Show Ignored
+                    </label>
+                    <button id="refresh-inspector" class="btn-refresh">Refresh Index</button>
+                </div>
+
+                <div class="inspector-table-container">
+                    <table id="inspector-table">
+                        <thead>
+                            <tr>
+                                <th class="col-status sortable" data-sort="status">Status <span
+                                        class="sort-icon"></span></th>
+                                <th class="col-title sortable" data-sort="title">Page Title <span
+                                        class="sort-icon"></span></th>
+                                <th class="col-url sortable" data-sort="url">URL <span class="sort-icon"></span></th>
+                                <th class="col-health sortable" data-sort="health">Score <span class="sort-icon"></span>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="inspector-body">
+                            <!-- Populated by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- INSPECTOR DRAWER -->
+        <div id="inspector-drawer" class="drawer hidden">
+            <div class="drawer-header">
+                <h2>Audit Details</h2>
+                <button id="close-drawer">×</button>
+            </div>
+            <div class="drawer-content">
+                <a id="drawer-url-link" target="_blank" class="url-display-link">https://example.com</a>
+
+                <div class="drawer-section">
+                    <label>Editable Metadata</label>
+                    <div class="form-group">
+                        <span class="field-label">Title</span>
+                        <input type="text" id="edit-title" class="code-input">
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">Description</span>
+                        <textarea id="edit-description" class="code-input" rows="3"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">Page Headings (H1-H3)</span>
+                        <textarea id="edit-headings" class="code-input" rows="2"></textarea>
                     </div>
                 </div>
 
-                <!-- Signals -->
-                <div class="ranking-group">
-                    <div class="ranking-header">Behavioral Signals</div>
+                <div class="drawer-section">
+                    <label>Health Audit</label>
+                    <ul id="health-checklist" class="checklist">
+                        <!-- Populated by JS -->
+                    </ul>
+                </div>
 
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-recency">Recency Bias</span>
-                            <span class="slider-value" id="val-signal-recency">80</span>
-                        </div>
-                        <input type="range" id="slider-signal-recency" min="0" max="100" value="80">
+                <div class="drawer-section">
+                    <label>Semantic Relevance Experiment</label>
+                    <div class="form-group">
+                        <span class="field-label">Focus Context (Primary)</span>
+                        <input type="text" id="exp-focus" class="code-input" placeholder="e.g. coding tools">
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">Ambient Context (Contextual)</span>
+                        <input type="text" id="exp-ambient" class="code-input" placeholder="e.g. debugging javascript">
                     </div>
 
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-frequency">Visit Frequency</span>
-                            <span class="slider-value" id="val-signal-frequency">60</span>
+                    <div id="exp-result-container" class="exp-result hidden">
+                        <div class="exp-score-row">
+                            <span class="exp-score-label">Semantic Score</span>
+                            <span id="exp-score-val" class="exp-score-val">--%</span>
                         </div>
-                        <input type="range" id="slider-signal-frequency" min="0" max="100" value="60">
-                    </div>
-
-                    <div class="slider-row">
-                        <div class="slider-info">
-                            <span class="slider-label" id="label-signal-semantic">Semantic Depth</span>
-                            <span class="slider-value" id="val-signal-semantic">90</span>
+                        <div class="exp-breakdown">
+                            <div class="breakdown-bar-container">
+                                <div id="bar-focus" class="breakdown-bar bar-focus" style="width: 0%"></div>
+                                <div id="bar-ambient" class="breakdown-bar bar-ambient" style="width: 0%"></div>
+                            </div>
+                            <div class="breakdown-labels">
+                                <span class="label-focus">Focus: <span id="val-focus">0</span>%</span>
+                                <span class="label-ambient">Ambient: <span id="val-ambient">0</span>%</span>
+                            </div>
                         </div>
-                        <input type="range" id="slider-signal-semantic" min="0" max="100" value="90">
                     </div>
                 </div>
-            </section>
 
-            <!-- Ignored Patterns Section -->
-            <section id="patterns" class="settings-section">
-                <div class="section-title">Ignored Patterns</div>
-                <div class="control-group"
-                    style="display: block; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; padding: 16px;">
-                    <div style="display: flex; gap: 8px; margin-bottom: 12px;">
-                        <input type="text" id="pattern-input" placeholder="e.g. *example.com*"
-                            style="flex: 1; background: var(--bg-input); border: 1px solid var(--border); color: white; padding: 8px; border-radius: 6px;">
-                        <button id="add-pattern-btn" class="btn-primary" style="width: auto;">Add</button>
-                    </div>
+                <div class="drawer-footer">
+                    <button id="save-metadata" class="btn-primary">Save & Re-Index</button>
                 </div>
-                <div id="patterns-list" class="data-list"></div>
-            </section>
-
-            <!-- Ignored Links Section -->
-            <section id="ignored" class="settings-section">
-                <div class="section-title">Ignored Links</div>
-                <div id="ignored-list" class="data-list">
-                    <div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">
-                        Loading blocklist...
-                    </div>
-                </div>
-            </section>
+            </div>
         </div>
     </div>
 
+    <script src="../lib/ai_engine.js"></script>
+    <script src="../lib/metadata_health.js"></script>
     <script src="../modules/storage.js"></script>
     <script src="settings.js"></script>
 </body>

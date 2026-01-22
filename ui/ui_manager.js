@@ -103,9 +103,6 @@ window.LinkyUI = {
         const getStyle = (key) => (weights && weights[key] === 0) ? 'ignored-factor' : '';
 
         div.innerHTML = `
-            <div class="feedback-overlay">
-                <button class="feedback-btn btn-ignore" title="Never show again">🚫</button>
-            </div>
             <div class="linky-title">
                 <img src="https://www.google.com/s2/favicons?domain=${new URL(link.url).hostname}&sz=32" class="queue-favicon" alt="">
                 <span>${escapeHTML(link.title || 'Untitled')}</span>
@@ -124,14 +121,27 @@ window.LinkyUI = {
             <!-- Detailed Breakdown (Visible on Hover) -->
             ${components ? `
             <div class="result-details">
-                ${sortType !== 'finalScore' ?
+                <div class="details-grid">
+                    ${sortType !== 'finalScore' ?
                     `<div class="detail-row"><span>AI Score</span> <span class="detail-val">${Math.round(score * 100)}</span></div>`
                     : ''}
-                
-                ${sortType !== 'semantic' ? `<div class="detail-row ${getStyle('semantic')}"><span>Semantic</span> <span class="detail-val">${getComp('semantic')}%</span></div>` : ''}
-                ${sortType !== 'recency' ? `<div class="detail-row ${getStyle('recency')}"><span>Recency</span> <span class="detail-val">${getComp('recency')}%</span></div>` : ''}
-                ${sortType !== 'frequency' ? `<div class="detail-row ${getStyle('frequency')}"><span>Frequency</span> <span class="detail-val">${getComp('frequency')}%</span></div>` : ''}
-                <div class="detail-row ${getStyle('source')}"><span>Source</span> <span class="detail-val">${link.sourceType}</span></div>
+                    
+                    ${sortType !== 'semantic' ? `
+                        <div class="detail-row ${getStyle('semantic')}">
+                            <span>Semantic</span> 
+                            <span class="detail-val ${components.densityMultiplier < 1 ? 'penalty-text' : ''}" 
+                                  title="${components.densityMultiplier < 1 ? `Reduced by ${Math.round((1 - components.densityMultiplier) * 100)}% due to sparse metadata` : ''}">
+                                ${getComp('semantic')}% ${components.densityMultiplier < 1 ? '⚠' : ''}
+                            </span>
+                        </div>` : ''}
+                    ${sortType !== 'recency' ? `<div class="detail-row ${getStyle('recency')}"><span>Recency</span> <span class="detail-val">${getComp('recency')}%</span></div>` : ''}
+                    ${sortType !== 'frequency' ? `<div class="detail-row ${getStyle('frequency')}"><span>Frequency</span> <span class="detail-val">${getComp('frequency')}%</span></div>` : ''}
+                    <div class="detail-row ${getStyle('source')}"><span>Source</span> <span class="detail-val">${link.sourceType}</span></div>
+                </div>
+                <div class="details-actions">
+                    <button class="feedback-btn btn-debug" title="Inspect link health and metadata">🐞</button>
+                    <button class="feedback-btn btn-ignore" title="Never show again">🚫</button>
+                </div>
             </div>` : ''}
         `;
 
@@ -166,6 +176,12 @@ window.LinkyUI = {
             const details = div.querySelector('.result-details');
             if (details) details.classList.remove('visible');
         });
+
+        div.querySelector('.btn-debug').onclick = (e) => {
+            e.stopPropagation();
+            const targetUrl = chrome.runtime.getURL(`ui/settings.html?tab=inspector&query=${encodeURIComponent(link.url)}`);
+            window.open(targetUrl, '_blank');
+        };
 
         div.querySelector('.btn-ignore').onclick = (e) => {
             e.stopPropagation();

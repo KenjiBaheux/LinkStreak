@@ -54,6 +54,8 @@
                 <button class="filter-btn active" data-source="tabs" title="Toggle Open Tabs">Tabs</button>
                 <button class="filter-btn active" data-source="history" title="Toggle History">History</button>
                 <button class="filter-btn active" data-source="bookmarks" title="Toggle Bookmarks">Bookmarks</button>
+                <button class="filter-btn" data-source="trackedOnly"
+                    title="Only show indexed links with rich metadata">Indexed</button>
 
                 <select id="sort-order" class="sort-select" title="Sort by...">
                     <option value="finalScore">AI Score</option>
@@ -83,7 +85,9 @@
         <div id="queue-status-bar">🧊 Empty link streak</div>
     </div>
 
+    <script src="../lib/metadata_health.js"></script>
     <script src="../modules/storage.js"></script>
+    <script src="../lib/summarizer.js"></script>
     <script src="../lib/ai_engine.js"></script>
     <script src="ui_manager.js"></script>
     <script src="view_controller.js"></script>
