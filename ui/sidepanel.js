@@ -222,24 +222,30 @@ async function performSearch(query, ambient = null, params = null) {
         return meta ? { ...link, ...meta, isTracked: true } : { ...link, isTracked: false };
     });
 
-    // 1. Dedup (keep first occurrence, which favors tabs over history if dupes exist)
-    const uniqueLinks = allLinks.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
+    // 1. Filter by Active Sources & Source Weights first
+    // This prevents a disabled source (e.g. Tabs) from "blocking" an enabled source (e.g. History) during dedup
+    const sourceMatchedLinks = allLinks.filter(link => {
+        // Check UI Toggle
+        const filterBtn = document.querySelector(`.filter-btn[data-source="${link.sourceType}"]`);
+        if (filterBtn && !filterBtn.classList.contains('active')) return false;
 
-    // 2. Filter Ignored
+        // Check Source Weight
+        const sourceWeight = weights.sources[link.sourceType] || 0;
+        if (sourceWeight === 0) return false;
+
+        return true;
+    });
+
+    // 2. Dedup (keeps the first occurrence, which respects the [Tabs, History, Bookmarks] priority order)
+    const uniqueLinks = sourceMatchedLinks.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
+
+    // 3. Filter Ignored & Indexed-Only
     const checks = await Promise.all(uniqueLinks.map(async link => {
         const isIgnored = await window.LinkyStorage.isUrlIgnored(link.url);
-
-        // Check Source Filter (UI Toggle)
-        const filterBtn = document.querySelector(`.filter-btn[data-source="${link.sourceType}"]`);
-        if (filterBtn && !filterBtn.classList.contains('active')) return null;
 
         // Check "Indexed" filter
         const trackedOnlyBtn = document.querySelector('.filter-btn[data-source="trackedOnly"]');
         if (trackedOnlyBtn && trackedOnlyBtn.classList.contains('active') && !link.isTracked) return null;
-
-        // Also check "Source Weight == 0" rule
-        const sourceWeight = weights.sources[link.sourceType] || 0;
-        if (sourceWeight === 0) return null;
 
         return isIgnored ? null : link;
     }));
@@ -251,7 +257,7 @@ async function performSearch(query, ambient = null, params = null) {
         return;
     }
 
-    // 3. AI Semantic Search
+    // 4. AI Semantic Search
     let aiResults;
     if (ambient) {
         aiResults = await window.linkyAIEngine.searchWithContext(query, ambient, {
@@ -261,7 +267,7 @@ async function performSearch(query, ambient = null, params = null) {
         });
     } else {
         // Keyword / Zero-Shot
-        aiResults = await window.linkyAIEngine.findRelevantLinks(query, validLinks.slice(0, 100));
+        aiResults = await window.linkyAIEngine.findRelevantLinks(query, validLinks);
     }
 
     // 4. Weighted Re-Ranking
@@ -287,26 +293,29 @@ async function performSearch(query, ambient = null, params = null) {
         // --- NEW: Density Penalty ---
         const metaText = (link.title || "") + (link.description || "") + (link.headings || link.h1 || "");
         let densityMultiplier = 1.0;
-        if (metaText.length < 40) densityMultiplier *= 0.6; // 40% penalty
-        if (!(link.description)) densityMultiplier *= 0.8; // 20% penalty
+        if (metaText.length < 60) densityMultiplier *= 0.6; // 40% penalty
+        if (!link.description || link.description.trim().length === 0) densityMultiplier *= 0.8; // 20% penalty
 
         // --- NEW: Quality Penalization ---
         const health = window.LinkyHealth.calculate(link);
         const qualityScalar = Math.max(0.1, health.score / 100); // Minimum 10% score even for junk
 
-        // Calculate Final
+        // Calculate Final (Normalized to 0-1)
+        const totalWeight = wSemantic + wRecency + wFreq + 0.5; // source boost is max 0.5
         const finalScore = (
-            (semanticScore * 3 * wSemantic * densityMultiplier) + // Semantic gets a 3x base boost & density penalty
+            (semanticScore * wSemantic * densityMultiplier) +
             (recencyScore * wRecency) +
             (freqScore * wFreq) +
             (wSource * 0.5)
-        ) * qualityScalar;
+        ) / totalWeight * qualityScalar;
 
         return {
             ...item,
             finalScore,
             components: {
-                semantic: semanticScore,
+                semanticRaw: semanticScore,
+                semantic: semanticScore * densityMultiplier,
+                densityMultiplier: densityMultiplier,
                 recency: recencyScore,
                 frequency: freqScore,
                 sourceBoost: wSource
@@ -390,7 +399,7 @@ async function handleReindexRequest(request) {
     const embedding = await window.linkyAIEngine.getEmbedding({
         title: request.metadata.title,
         description: request.metadata.description,
-        h1: request.metadata.h1
+        headings: request.metadata.headings || request.metadata.h1 || ""
     });
 
     if (embedding) {
@@ -399,7 +408,8 @@ async function handleReindexRequest(request) {
             url: request.url,
             title: request.metadata.title,
             embedding: embedding,
-            description: request.metadata.description
+            description: request.metadata.description,
+            headings: request.metadata.headings || request.metadata.h1 || ""
         });
     }
 }

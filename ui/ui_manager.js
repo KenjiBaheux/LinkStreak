@@ -126,7 +126,14 @@ window.LinkyUI = {
                     `<div class="detail-row"><span>AI Score</span> <span class="detail-val">${Math.round(score * 100)}</span></div>`
                     : ''}
                     
-                    ${sortType !== 'semantic' ? `<div class="detail-row ${getStyle('semantic')}"><span>Semantic</span> <span class="detail-val">${getComp('semantic')}%</span></div>` : ''}
+                    ${sortType !== 'semantic' ? `
+                        <div class="detail-row ${getStyle('semantic')}">
+                            <span>Semantic</span> 
+                            <span class="detail-val ${components.densityMultiplier < 1 ? 'penalty-text' : ''}" 
+                                  title="${components.densityMultiplier < 1 ? `Reduced by ${Math.round((1 - components.densityMultiplier) * 100)}% due to sparse metadata` : ''}">
+                                ${getComp('semantic')}% ${components.densityMultiplier < 1 ? '⚠' : ''}
+                            </span>
+                        </div>` : ''}
                     ${sortType !== 'recency' ? `<div class="detail-row ${getStyle('recency')}"><span>Recency</span> <span class="detail-val">${getComp('recency')}%</span></div>` : ''}
                     ${sortType !== 'frequency' ? `<div class="detail-row ${getStyle('frequency')}"><span>Frequency</span> <span class="detail-val">${getComp('frequency')}%</span></div>` : ''}
                     <div class="detail-row ${getStyle('source')}"><span>Source</span> <span class="detail-val">${link.sourceType}</span></div>

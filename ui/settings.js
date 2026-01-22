@@ -202,14 +202,15 @@ async function initInspector() {
             renderLinkInspector(query);
 
             if (request.url === currentEditingUrl && !isDrawerDirty) {
-                // Refresh data from cache and update drawer
-                window.LinkyStorage.getMetadataIndex().then(cache => {
-                    const meta = cache[request.url];
-                    if (meta) {
-                        inspectorData[request.url] = meta;
-                        openInspectorDrawer(request.url, meta);
-                    }
-                });
+                // Use data from request if possible to avoid storage race
+                const meta = {
+                    title: request.title,
+                    description: request.metadata.description,
+                    headings: request.metadata.headings,
+                    contentHash: request.contentHash
+                };
+                inspectorData[request.url] = meta;
+                openInspectorDrawer(request.url, meta);
             }
         }
     });
@@ -473,12 +474,37 @@ async function runSemanticExperiment() {
         ambientScore = window.linkyAIEngine.TextEmbedder.cosineSimilarity(mockAmbient, mockPage);
     }
 
-    // 3. Blend
-    const finalScore = (focusScore * focusWeight) + (ambientScore * ambientWeight);
+    // 3. Blend & Apply Density Penalty (Aligned with sidepanel.js)
+    let semanticScore = (focusScore * focusWeight) + (ambientScore * ambientWeight);
+
+    const metaText = (liveMeta.title || "") + (liveMeta.description || "") + (liveMeta.headings || "");
+    let densityMultiplier = 1.0;
+    let penaltyReason = "";
+
+    if (metaText.length < 60) {
+        densityMultiplier *= 0.6;
+        penaltyReason = "Sparse Metadata";
+    }
+    if (!liveMeta.description) {
+        densityMultiplier *= 0.8;
+        penaltyReason = penaltyReason ? "Sparse + No Desc" : "No Description";
+    }
+
+    const finalScore = semanticScore * densityMultiplier;
 
     // 4. Update UI
     resultContainer.style.opacity = '1';
-    document.getElementById('exp-score-val').textContent = `${Math.round(finalScore * 100)}%`;
+    const scoreValEl = document.getElementById('exp-score-val');
+    scoreValEl.textContent = `${Math.round(finalScore * 100)}%`;
+
+    // Visual indicator of penalty
+    if (densityMultiplier < 1.0) {
+        scoreValEl.style.color = 'var(--danger)';
+        scoreValEl.title = `Penalty Applied: ${penaltyReason} (${Math.round((1 - densityMultiplier) * 100)}% reduction)`;
+    } else {
+        scoreValEl.style.color = 'var(--accent-blue)';
+        scoreValEl.title = "";
+    }
 
     const focusPct = Math.round(focusScore * 100);
     const ambientPct = Math.round(ambientScore * 100);

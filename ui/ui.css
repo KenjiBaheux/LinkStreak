@@ -391,6 +391,10 @@ h2 {
     font-weight: 600;
 }
 
+.penalty-text {
+    color: var(--danger) !important;
+}
+
 .ignored-factor {
     text-decoration: line-through;
     opacity: 0.5;

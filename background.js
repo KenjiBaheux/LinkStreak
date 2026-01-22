@@ -202,32 +202,34 @@ async function saveToVectorCache(url, data) {
   await chrome.storage.local.set({ [VECTOR_CACHE_KEY]: cache });
 }
 
-chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url?.startsWith('http')) {
-    chrome.scripting.executeScript({
-      target: { tabId },
-      func: () => {
-        // Collect H1, H2, H3
-        const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
-          .map(h => h.innerText.trim())
-          .filter(t => t.length > 0)
-          .slice(0, 10) // Cap to avoid massive strings
-          .join(' | ');
+    try {
+      const results = await chrome.scripting.executeScript({
+        target: { tabId },
+        func: () => {
+          // Collect H1, H2, H3
+          const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
+            .map(h => h.innerText.trim())
+            .filter(t => t.length > 0)
+            .slice(0, 10) // Cap to avoid massive strings
+            .join(' | ');
 
-        return {
-          description: document.querySelector('meta[name="description"]')?.content || "",
-          headings: headings
-        };
-      }
-    }).then(results => {
+          return {
+            description: document.querySelector('meta[name="description"]')?.content || "",
+            headings: headings
+          };
+        }
+      });
+
       const metadata = results?.[0]?.result;
       if (metadata) {
         // Simple hash to detect content changes (using headings instead of h1)
         const contentStr = `${tab.title}|${metadata.description}|${metadata.headings}`;
         const contentHash = hashCode(contentStr);
 
-        // PERSIST the metadata to the cache immediately
-        saveToVectorCache(tab.url, {
+        // PERSIST the metadata to the cache and WAIT for it to finish
+        await saveToVectorCache(tab.url, {
           title: tab.title,
           description: metadata.description,
           headings: metadata.headings,
@@ -242,7 +244,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
           metadata
         }).catch(() => { });
       }
-    }).catch(() => { });
+    } catch (e) {
+      // Scripting might fail on restricted pages
+    }
   }
 });
 
