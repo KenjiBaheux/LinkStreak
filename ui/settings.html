@@ -82,6 +82,15 @@
                             <label for="input-history-max">Max Results:</label>
                             <input type="number" id="input-history-max" min="10" max="5000" step="10" value="150">
                         </div>
+                        <div style="margin-bottom: 20px; padding-left: 10px;">
+                            <label class="checkbox-container">
+                                <input type="checkbox" id="check-history-local"> Local History Only
+                            </label>
+                            <p class="field-subtext"
+                                style="font-size: 11px; margin-top: -6px; margin-left: 24px; color: var(--text-dim);">
+                                Ignore links synced from your phone or other computers.
+                            </p>
+                        </div>
                         <div class="slider-row">
                             <div class="slider-info">
                                 <span class="slider-label" id="label-source-bookmarks">Bookmarks</span>
@@ -158,10 +167,13 @@
                     <table id="inspector-table">
                         <thead>
                             <tr>
-                                <th class="col-status">Status</th>
-                                <th class="col-title">Page Title</th>
-                                <th class="col-url">URL</th>
-                                <th class="col-health">Score</th>
+                                <th class="col-status sortable" data-sort="status">Status <span
+                                        class="sort-icon"></span></th>
+                                <th class="col-title sortable" data-sort="title">Page Title <span
+                                        class="sort-icon"></span></th>
+                                <th class="col-url sortable" data-sort="url">URL <span class="sort-icon"></span></th>
+                                <th class="col-health sortable" data-sort="health">Score <span class="sort-icon"></span>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="inspector-body">
@@ -179,7 +191,7 @@
                 <button id="close-drawer">×</button>
             </div>
             <div class="drawer-content">
-                <div class="url-display" id="drawer-url">https://example.com</div>
+                <a id="drawer-url-link" target="_blank" class="url-display-link">https://example.com</a>
 
                 <div class="drawer-section">
                     <label>Editable Metadata</label>
@@ -192,8 +204,8 @@
                         <textarea id="edit-description" class="code-input" rows="3"></textarea>
                     </div>
                     <div class="form-group">
-                        <span class="field-label">H1 Header</span>
-                        <input type="text" id="edit-h1" class="code-input">
+                        <span class="field-label">Page Headings (H1-H3)</span>
+                        <textarea id="edit-headings" class="code-input" rows="2"></textarea>
                     </div>
                 </div>
 
@@ -204,6 +216,35 @@
                     </ul>
                 </div>
 
+                <div class="drawer-section">
+                    <label>Semantic Relevance Experiment</label>
+                    <div class="form-group">
+                        <span class="field-label">Focus Context (Primary)</span>
+                        <input type="text" id="exp-focus" class="code-input" placeholder="e.g. coding tools">
+                    </div>
+                    <div class="form-group">
+                        <span class="field-label">Ambient Context (Contextual)</span>
+                        <input type="text" id="exp-ambient" class="code-input" placeholder="e.g. debugging javascript">
+                    </div>
+
+                    <div id="exp-result-container" class="exp-result hidden">
+                        <div class="exp-score-row">
+                            <span class="exp-score-label">AI Score</span>
+                            <span id="exp-score-val" class="exp-score-val">--%</span>
+                        </div>
+                        <div class="exp-breakdown">
+                            <div class="breakdown-bar-container">
+                                <div id="bar-focus" class="breakdown-bar bar-focus" style="width: 0%"></div>
+                                <div id="bar-ambient" class="breakdown-bar bar-ambient" style="width: 0%"></div>
+                            </div>
+                            <div class="breakdown-labels">
+                                <span class="label-focus">Focus: <span id="val-focus">0</span>%</span>
+                                <span class="label-ambient">Ambient: <span id="val-ambient">0</span>%</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="drawer-footer">
                     <button id="save-metadata" class="btn-primary">Save & Re-Index</button>
                 </div>
@@ -211,6 +252,8 @@
         </div>
     </div>
 
+    <script src="../lib/ai_engine.js"></script>
+    <script src="../lib/metadata_health.js"></script>
     <script src="../modules/storage.js"></script>
     <script src="settings.js"></script>
 </body>

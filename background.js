@@ -6,12 +6,14 @@ let lastSelection = null;
 // 1. Unified Message Listener
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get-browser-data") {
-    chrome.storage.local.get(['retrievalOptions']).then(async data => {
+    chrome.storage.local.get(['retrievalOptions', VECTOR_CACHE_KEY]).then(async data => {
       const opts = data.retrievalOptions || {
         maxHistoryResults: 150,
         currentWindowLimit: false,
-        ignorePinnedTabs: true
+        ignorePinnedTabs: true,
+        localOnly: false
       };
+      const cache = data[VECTOR_CACHE_KEY] || {};
 
       const tabsQuery = { windowType: 'normal' };
       if (opts.currentWindowLimit) tabsQuery.currentWindow = true;
@@ -21,16 +23,46 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const currentUrl = currentTab?.url;
 
-      Promise.all([
+      const [history, tabs] = await Promise.all([
         chrome.history.search({ text: '', maxResults: opts.maxHistoryResults }),
         chrome.tabs.query(tabsQuery)
-      ]).then(([history, tabs]) => {
-        // Filter out current tab by ID and matching current URL
-        const filteredTabs = tabs.filter(t => t.id !== currentTab?.id && t.url !== currentUrl);
-        const filteredHistory = history.filter(h => h.url !== currentUrl);
+      ]);
 
-        sendResponse({ history: filteredHistory, tabs: filteredTabs });
-      });
+      // Filter out current tab by ID and matching current URL
+      const filteredTabs = tabs.filter(t => t.id !== currentTab?.id && t.url !== currentUrl);
+      let filteredHistory = history.filter(h => h.url !== currentUrl);
+
+      // --- Local History Only Filter ---
+      if (opts.localOnly) {
+        const checks = await Promise.all(filteredHistory.map(async item => {
+          // 1. Check Cache first
+          if (cache[item.url] && cache[item.url].isLocal !== undefined) {
+            return cache[item.url].isLocal ? item : null;
+          }
+
+          // 2. Query History for visits
+          try {
+            const visits = await chrome.history.getVisits({ url: item.url });
+            if (!visits || visits.length === 0) return null;
+
+            const isLocal = visits[visits.length - 1].isLocal;
+
+            // 3. Cache the result (update existing or create minimal entry)
+            cache[item.url] = { ...(cache[item.url] || {}), isLocal };
+
+            return isLocal ? item : null;
+          } catch (e) {
+            return null;
+          }
+        }));
+
+        filteredHistory = checks.filter(h => h !== null);
+
+        // Persist the updated cache with isLocal flags
+        await chrome.storage.local.set({ [VECTOR_CACHE_KEY]: cache });
+      }
+
+      sendResponse({ history: filteredHistory, tabs: filteredTabs });
     });
     return true; // Keep channel open for async
   }
@@ -174,16 +206,33 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url?.startsWith('http')) {
     chrome.scripting.executeScript({
       target: { tabId },
-      func: () => ({
-        description: document.querySelector('meta[name="description"]')?.content || "",
-        h1: document.querySelector('h1')?.innerText || ""
-      })
+      func: () => {
+        // Collect H1, H2, H3
+        const headings = Array.from(document.querySelectorAll('h1, h2, h3'))
+          .map(h => h.innerText.trim())
+          .filter(t => t.length > 0)
+          .slice(0, 10) // Cap to avoid massive strings
+          .join(' | ');
+
+        return {
+          description: document.querySelector('meta[name="description"]')?.content || "",
+          headings: headings
+        };
+      }
     }).then(results => {
       const metadata = results?.[0]?.result;
       if (metadata) {
-        // Simple hash to detect content changes
-        const contentStr = `${tab.title}|${metadata.description}|${metadata.h1}`;
+        // Simple hash to detect content changes (using headings instead of h1)
+        const contentStr = `${tab.title}|${metadata.description}|${metadata.headings}`;
         const contentHash = hashCode(contentStr);
+
+        // PERSIST the metadata to the cache immediately
+        saveToVectorCache(tab.url, {
+          title: tab.title,
+          description: metadata.description,
+          headings: metadata.headings,
+          contentHash
+        });
 
         chrome.runtime.sendMessage({
           action: "index-new-page",

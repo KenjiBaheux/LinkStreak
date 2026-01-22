@@ -207,14 +207,20 @@ async function performSearch(query, ambient = null, params = null) {
 
     // 0. Load Weights & Data
     const weights = await window.LinkyStorage.getRankingWeights();
-    await refreshBrowserData();
+    const [cache, _] = await Promise.all([
+        window.LinkyStorage.getMetadataIndex(),
+        refreshBrowserData()
+    ]);
 
-    // flattened list with source type tagged
+    // flattened list with source type tagged and METADATA merged
     const allLinks = [
         ...currentBrowserData.tabs.map(t => ({ ...t, sourceType: 'tabs' })),
         ...currentBrowserData.history.map(h => ({ ...h, sourceType: 'history' })),
         ...(currentBrowserData.bookmarks || []).map(b => ({ ...b, sourceType: 'bookmarks' }))
-    ];
+    ].map(link => {
+        const meta = cache[link.url];
+        return meta ? { ...link, ...meta, isTracked: true } : { ...link, isTracked: false };
+    });
 
     // 1. Dedup (keep first occurrence, which favors tabs over history if dupes exist)
     const uniqueLinks = allLinks.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
@@ -226,6 +232,10 @@ async function performSearch(query, ambient = null, params = null) {
         // Check Source Filter (UI Toggle)
         const filterBtn = document.querySelector(`.filter-btn[data-source="${link.sourceType}"]`);
         if (filterBtn && !filterBtn.classList.contains('active')) return null;
+
+        // Check "Indexed" filter
+        const trackedOnlyBtn = document.querySelector('.filter-btn[data-source="trackedOnly"]');
+        if (trackedOnlyBtn && trackedOnlyBtn.classList.contains('active') && !link.isTracked) return null;
 
         // Also check "Source Weight == 0" rule
         const sourceWeight = weights.sources[link.sourceType] || 0;
@@ -274,12 +284,23 @@ async function performSearch(query, ambient = null, params = null) {
         const wFreq = (weights.signals.frequency / 100);
         const wSource = (weights.sources[link.sourceType] || 0) / 100;
 
+        // --- NEW: Density Penalty ---
+        const metaText = (link.title || "") + (link.description || "") + (link.headings || link.h1 || "");
+        let densityMultiplier = 1.0;
+        if (metaText.length < 40) densityMultiplier *= 0.6; // 40% penalty
+        if (!(link.description)) densityMultiplier *= 0.8; // 20% penalty
+
+        // --- NEW: Quality Penalization ---
+        const health = window.LinkyHealth.calculate(link);
+        const qualityScalar = Math.max(0.1, health.score / 100); // Minimum 10% score even for junk
+
         // Calculate Final
-        const finalScore =
-            (semanticScore * 3 * wSemantic) + // Semantic gets a 3x base boost
+        const finalScore = (
+            (semanticScore * 3 * wSemantic * densityMultiplier) + // Semantic gets a 3x base boost & density penalty
             (recencyScore * wRecency) +
             (freqScore * wFreq) +
-            (wSource * 0.5);
+            (wSource * 0.5)
+        ) * qualityScalar;
 
         return {
             ...item,

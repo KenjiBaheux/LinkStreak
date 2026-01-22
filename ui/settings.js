@@ -108,6 +108,8 @@ function setupNavigation() {
 
 let inspectorData = {};
 let currentEditingUrl = null;
+let isDrawerDirty = false;
+let currentSort = { key: 'title', direction: 'asc' };
 
 async function initInspector() {
     const refreshBtn = document.getElementById('refresh-inspector');
@@ -115,7 +117,12 @@ async function initInspector() {
     const closeDrawerBtn = document.getElementById('close-drawer');
     const saveBtn = document.getElementById('save-metadata');
 
-    if (refreshBtn) refreshBtn.onclick = () => renderLinkInspector();
+    if (refreshBtn) {
+        refreshBtn.onclick = () => {
+            const query = searchInput?.value.toLowerCase() || "";
+            renderLinkInspector(query);
+        };
+    }
 
     if (searchInput) {
         searchInput.oninput = () => {
@@ -138,32 +145,110 @@ async function initInspector() {
         };
     }
 
+    // Table Sorting Listeners
+    const headers = document.querySelectorAll('#inspector-table th.sortable');
+    headers.forEach(header => {
+        header.onclick = () => {
+            const key = header.dataset.sort;
+            if (currentSort.key === key) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.key = key;
+                currentSort.direction = 'asc';
+            }
+
+            // Update Header UI
+            headers.forEach(h => {
+                h.classList.remove('sort-asc', 'sort-desc');
+                if (h === header) {
+                    h.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+                }
+            });
+
+            const searchInput = document.getElementById('inspector-search');
+            renderLinkInspector(searchInput?.value.toLowerCase() || "");
+        };
+    });
+
     if (saveBtn) {
         saveBtn.onclick = handleSaveMetadata;
     }
+
+    // Live Metadata & Experiment Listeners
+    ['edit-title', 'edit-description', 'edit-headings'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.oninput = () => {
+            isDrawerDirty = true;
+            clearTimeout(window.expDebounce);
+            window.expDebounce = setTimeout(() => runSemanticExperiment(), 400);
+        };
+    });
+
+    // Experiment Listeners
+    ['exp-focus', 'exp-ambient'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.oninput = () => {
+                clearTimeout(window.expDebounce);
+                window.expDebounce = setTimeout(() => runSemanticExperiment(), 400);
+            };
+        }
+    });
+
+    // Auto-sync listener
+    chrome.runtime.onMessage.addListener((request) => {
+        if (request.action === 'index-new-page') {
+            const query = searchInput?.value.toLowerCase() || "";
+            renderLinkInspector(query);
+
+            if (request.url === currentEditingUrl && !isDrawerDirty) {
+                // Refresh data from cache and update drawer
+                window.LinkyStorage.getMetadataIndex().then(cache => {
+                    const meta = cache[request.url];
+                    if (meta) {
+                        inspectorData[request.url] = meta;
+                        openInspectorDrawer(request.url, meta);
+                    }
+                });
+            }
+        }
+    });
 }
 
 async function renderLinkInspector(filterQuery = "") {
     const container = document.getElementById('inspector-body');
     if (!container) return;
 
-    // Fetch cache and patterns
-    const cache = await window.LinkyStorage.getMetadataIndex();
+    // 1. Fetch live and cached data
+    const [cache, browserData] = await Promise.all([
+        window.LinkyStorage.getMetadataIndex(),
+        chrome.runtime.sendMessage({ action: "get-browser-data" })
+    ]);
+
     const showIgnored = document.getElementById('show-ignored-toggle')?.checked || false;
     inspectorData = cache;
 
     container.innerHTML = '';
 
-    // Filter and collect valid URLs
-    const filteredUrls = [];
+    // 2. Merge Data
+    const liveLinks = [
+        ...(browserData.tabs || []),
+        ...(browserData.history || []),
+        ...(browserData.bookmarks || [])
+    ];
+
+    // Create a unified set of URLs
+    const allUrls = new Set([...Object.keys(cache), ...liveLinks.map(l => l.url)]);
+    const filteredResults = [];
     const query = filterQuery.trim().toLowerCase();
 
-    for (const url of Object.keys(cache)) {
+    for (const url of allUrls) {
         let isMatch = false;
-        const meta = cache[url];
+        // Prefer cache, then live data
+        const meta = cache[url] || liveLinks.find(l => l.url === url) || { url };
         const title = (meta.title || "").toLowerCase();
         const description = (meta.description || "").toLowerCase();
-        const h1 = (meta.h1 || "").toLowerCase();
+        const headings = (meta.headings || meta.h1 || "").toLowerCase();
         const lowUrl = url.toLowerCase();
 
         if (!query) {
@@ -175,14 +260,11 @@ async function renderLinkInspector(filterQuery = "") {
         } else if (query.startsWith('desc:') || query.startsWith('description:')) {
             const term = query.startsWith('desc:') ? query.replace('desc:', '') : query.replace('description:', '');
             isMatch = description.includes(term.trim());
-        } else if (query.startsWith('h1:')) {
-            isMatch = h1.includes(query.replace('h1:', '').trim());
+        } else if (query.startsWith('head:') || query.startsWith('heading:') || query.startsWith('h1:')) {
+            const term = query.replace(/^(head:|heading:|h1:)/, '');
+            isMatch = headings.includes(term.trim());
         } else {
-            // General matching against all fields
-            isMatch = lowUrl.includes(query) ||
-                title.includes(query) ||
-                description.includes(query) ||
-                h1.includes(query);
+            isMatch = lowUrl.includes(query) || title.includes(query) || description.includes(query) || headings.includes(query);
         }
 
         if (!isMatch) continue;
@@ -190,31 +272,72 @@ async function renderLinkInspector(filterQuery = "") {
         const isIgnored = await window.LinkyStorage.isUrlIgnored(url);
         if (isIgnored && !showIgnored) continue;
 
-        filteredUrls.push({ url, isIgnored });
+        filteredResults.push({
+            url,
+            meta,
+            isIgnored,
+            isTracked: !!cache[url],
+            health: window.LinkyHealth.calculate(meta) // Calculate once for sorting
+        });
     }
 
-    if (filteredUrls.length === 0) {
-        container.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color: var(--text-dim);">No indexed links found matching your query.</td></tr>`;
+    // 3. Sort Results
+    filteredResults.sort((a, b) => {
+        let valA, valB;
+
+        switch (currentSort.key) {
+            case 'status':
+                valA = a.isTracked ? (a.isIgnored ? 0 : a.health.score) : -1;
+                valB = b.isTracked ? (b.isIgnored ? 0 : b.health.score) : -1;
+                break;
+            case 'title':
+                valA = (a.meta.title || "Untitled").toLowerCase();
+                valB = (b.meta.title || "Untitled").toLowerCase();
+                break;
+            case 'url':
+                valA = a.url.toLowerCase();
+                valB = b.url.toLowerCase();
+                break;
+            case 'health':
+                valA = a.health.score;
+                valB = b.health.score;
+                break;
+            default:
+                valA = a.url;
+                valB = b.url;
+        }
+
+        if (valA < valB) return currentSort.direction === 'asc' ? -1 : 1;
+        if (valA > valB) return currentSort.direction === 'asc' ? 1 : -1;
+        return 0;
+    });
+
+    if (filteredResults.length === 0) {
+        container.innerHTML = `<tr><td colspan="4" style="text-align:center; padding: 40px; color: var(--text-dim);">No links found matching your query.</td></tr>`;
         return;
     }
 
-    filteredUrls.forEach(({ url, isIgnored }) => {
-        const meta = cache[url];
-        const health = calculateHealth(meta);
-        const statusClass = isIgnored ? 'ignored-status' : (health.score > 80 ? 'green' : (health.score > 40 ? 'yellow' : 'red'));
+    filteredResults.forEach(({ url, meta, isIgnored, isTracked, health }) => {
+        let statusClass = 'untracked';
+
+        if (isTracked) {
+            statusClass = isIgnored ? 'ignored-status' : (health.score > 80 ? 'green' : (health.score > 40 ? 'yellow' : 'red'));
+        }
 
         const tr = document.createElement('tr');
         if (isIgnored) tr.classList.add('row-ignored');
+        if (!isTracked) tr.classList.add('row-untracked');
 
         tr.innerHTML = `
-            <td class="col-status"><span class="status-dot ${statusClass}"></span></td>
+            <td class="col-status"><span class="status-dot ${statusClass}" title="${isTracked ? 'Tracked' : 'Untracked'}"></span></td>
             <td class="col-title">
                 ${isIgnored ? '<span class="label-ignored">IGNORED</span> ' : ''}
+                ${!isTracked ? '<span class="label-untracked">UNTRACKED</span> ' : ''}
                 ${escapeHTML(meta.title || "Untitled")}
             </td>
             <td class="col-url">${escapeHTML(url)}</td>
-            <td class="col-health" style="color: ${isIgnored ? 'var(--text-dim)' : (statusClass === 'green' ? 'var(--accent-green)' : (statusClass === 'yellow' ? '#fbbf24' : 'var(--danger)'))}">
-                ${isIgnored ? '--' : health.score + '%'}
+            <td class="col-health" style="color: ${!isTracked || isIgnored ? 'var(--text-dim)' : (statusClass === 'green' ? 'var(--accent-green)' : (statusClass === 'yellow' ? '#fbbf24' : 'var(--danger)'))}">
+                ${!isTracked || isIgnored ? '--' : health.score + '%'}
             </td>
         `;
 
@@ -223,54 +346,32 @@ async function renderLinkInspector(filterQuery = "") {
     });
 }
 
-function calculateHealth(meta) {
-    let score = 0;
-    const notes = [];
-
-    // Title Check (max 30)
-    if (meta.title && meta.title.length > 10) {
-        score += 30;
-        notes.push({ type: 'pass', text: 'Good title length' });
-    } else if (meta.title) {
-        score += 15;
-        notes.push({ type: 'warn', text: 'Title is a bit short' });
-    } else {
-        notes.push({ type: 'fail', text: 'Title is missing' });
-    }
-
-    // Description Check (max 40)
-    if (meta.description && meta.description.length > 50) {
-        score += 40;
-        notes.push({ type: 'pass', text: 'Rich meta description' });
-    } else if (meta.description && meta.description.length > 0) {
-        score += 20;
-        notes.push({ type: 'warn', text: 'Description is too brief' });
-    } else {
-        notes.push({ type: 'fail', text: 'Missing description' });
-    }
-
-    // H1 Check (max 30)
-    if (meta.h1 && meta.h1.length > 0) {
-        score += 30;
-        notes.push({ type: 'pass', text: 'H1 header detected' });
-    } else {
-        notes.push({ type: 'warn', text: 'No H1 header found' });
-    }
-
-    return { score, notes };
-}
 
 function openInspectorDrawer(url, meta) {
     currentEditingUrl = url;
+    isDrawerDirty = false; // Reset dirty state on open/refresh
     const drawer = document.getElementById('inspector-drawer');
     drawer.classList.remove('hidden');
 
-    document.getElementById('drawer-url').textContent = url;
+    const linkEl = document.getElementById('drawer-url-link');
+    if (linkEl) {
+        linkEl.textContent = url;
+        linkEl.href = url;
+    }
+
     document.getElementById('edit-title').value = meta.title || "";
     document.getElementById('edit-description').value = meta.description || "";
-    document.getElementById('edit-h1').value = meta.h1 || "";
+    document.getElementById('edit-headings').value = meta.headings || meta.h1 || "";
 
-    const health = calculateHealth(meta);
+    // Reset Experiment
+    document.getElementById('exp-focus').value = "";
+    document.getElementById('exp-ambient').value = "";
+    document.getElementById('exp-result-container').classList.add('hidden');
+
+    // Warm up AI if needed
+    if (window.linkyAIEngine) window.linkyAIEngine.init();
+
+    const health = window.LinkyHealth.calculate(meta);
     const checklist = document.getElementById('health-checklist');
     checklist.innerHTML = '';
 
@@ -290,11 +391,11 @@ async function handleSaveMetadata() {
     if (!currentEditingUrl) return;
 
     const newMeta = {
+        ...inspectorData[currentEditingUrl],
         title: document.getElementById('edit-title').value,
         description: document.getElementById('edit-description').value,
-        h1: document.getElementById('edit-h1').value,
-        // Keep the contentHash and embedding if they exist, though re-index will override embedding
-        ...inspectorData[currentEditingUrl]
+        headings: document.getElementById('edit-headings').value
+        // New values overwrite old ones from the spread
     };
 
     // Update Storage
@@ -309,8 +410,89 @@ async function handleSaveMetadata() {
     });
 
     // Refresh UI
-    await renderLinkInspector();
+    await renderLinkInspector(document.getElementById('inspector-search')?.value.toLowerCase() || "");
     document.getElementById('inspector-drawer').classList.add('hidden');
+}
+
+async function runSemanticExperiment() {
+    if (!currentEditingUrl || !window.linkyAIEngine) return;
+
+    const focusText = document.getElementById('exp-focus').value.trim();
+    const ambientText = document.getElementById('exp-ambient').value.trim();
+    const resultContainer = document.getElementById('exp-result-container');
+
+    if (!focusText && !ambientText) {
+        resultContainer.classList.add('hidden');
+        return;
+    }
+
+    resultContainer.classList.remove('hidden');
+    resultContainer.style.opacity = '0.7'; // Indicate loading
+
+    // 1. Get Embeddings
+    const liveMeta = {
+        title: document.getElementById('edit-title').value,
+        description: document.getElementById('edit-description').value,
+        headings: document.getElementById('edit-headings').value
+    };
+
+    const [focusVec, ambientVec, pageVec] = await Promise.all([
+        focusText ? window.linkyAIEngine.getEmbedding(focusText) : null,
+        ambientText ? window.linkyAIEngine.getEmbedding(ambientText) : null,
+        window.linkyAIEngine.getEmbedding(liveMeta)
+    ]);
+
+    if (!pageVec) return;
+
+    // 2. Calculate Components
+    // We use the same weights logic as the search (0.7 / 0.3)
+    let focusWeight = 0.7;
+    let ambientWeight = 0.3;
+
+    // Adjust weights if one is missing to avoid score dilution
+    if (!focusText) {
+        focusWeight = 0;
+        ambientWeight = 1.0;
+    } else if (!ambientText) {
+        focusWeight = 1.0;
+        ambientWeight = 0;
+    }
+
+    let focusScore = 0;
+    let ambientScore = 0;
+
+    if (focusVec) {
+        const mockPage = { floatEmbedding: new Float32Array(pageVec) };
+        const mockFocus = { floatEmbedding: new Float32Array(focusVec) };
+        focusScore = window.linkyAIEngine.TextEmbedder.cosineSimilarity(mockFocus, mockPage);
+    }
+
+    if (ambientVec) {
+        const mockPage = { floatEmbedding: new Float32Array(pageVec) };
+        const mockAmbient = { floatEmbedding: new Float32Array(ambientVec) };
+        ambientScore = window.linkyAIEngine.TextEmbedder.cosineSimilarity(mockAmbient, mockPage);
+    }
+
+    // 3. Blend
+    const finalScore = (focusScore * focusWeight) + (ambientScore * ambientWeight);
+
+    // 4. Update UI
+    resultContainer.style.opacity = '1';
+    document.getElementById('exp-score-val').textContent = `${Math.round(finalScore * 100)}%`;
+
+    const focusPct = Math.round(focusScore * 100);
+    const ambientPct = Math.round(ambientScore * 100);
+
+    document.getElementById('val-focus').textContent = focusPct;
+    document.getElementById('val-ambient').textContent = ambientPct;
+
+    // Relative visual breakdown (shares of the total influence)
+    const focusShare = (focusScore * focusWeight);
+    const ambientShare = (ambientScore * ambientWeight);
+    const totalShare = focusShare + ambientShare || 1;
+
+    document.getElementById('bar-focus').style.width = `${(focusShare / totalShare) * 100}%`;
+    document.getElementById('bar-ambient').style.width = `${(ambientShare / totalShare) * 100}%`;
 }
 
 // --- Sliders & Ranking ---
@@ -361,18 +543,21 @@ async function initRetrievalOptions() {
     const inputHistory = document.getElementById('input-history-max');
     const checkWindow = document.getElementById('check-tabs-window');
     const checkPinned = document.getElementById('check-tabs-pinned');
+    const checkLocal = document.getElementById('check-history-local');
 
     // Init Values
     if (inputHistory) inputHistory.value = opts.maxHistoryResults;
     if (checkWindow) checkWindow.checked = opts.currentWindowLimit;
     if (checkPinned) checkPinned.checked = opts.ignorePinnedTabs;
+    if (checkLocal) checkLocal.checked = opts.localOnly;
 
     // Listeners
     const save = async () => {
         const newOpts = {
             maxHistoryResults: parseInt(inputHistory.value) || 150,
             currentWindowLimit: checkWindow.checked,
-            ignorePinnedTabs: checkPinned.checked
+            ignorePinnedTabs: checkPinned.checked,
+            localOnly: checkLocal ? checkLocal.checked : false
         };
         await window.LinkyStorage.saveRetrievalOptions(newOpts);
     };
@@ -380,6 +565,7 @@ async function initRetrievalOptions() {
     if (inputHistory) inputHistory.onchange = save;
     if (checkWindow) checkWindow.onchange = save;
     if (checkPinned) checkPinned.onchange = save;
+    if (checkLocal) checkLocal.onchange = save;
 }
 
 function setupPresets() {

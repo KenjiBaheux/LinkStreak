@@ -154,7 +154,8 @@ window.LinkyStorage = {
         const defaults = {
             maxHistoryResults: 150,
             currentWindowLimit: false,
-            ignorePinnedTabs: true
+            ignorePinnedTabs: true,
+            localOnly: false
         };
         return { ...defaults, ...data.retrievalOptions };
     },
@@ -182,7 +183,8 @@ window.LinkyStorage = {
             filters: {
                 tabs: true,
                 history: true,
-                bookmarks: true
+                bookmarks: true,
+                trackedOnly: false
             },
             sortOrder: 'finalScore'
         };

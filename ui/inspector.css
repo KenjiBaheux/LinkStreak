@@ -129,9 +129,19 @@ tr:hover td {
     opacity: 0.5;
 }
 
+.status-dot.untracked {
+    background: transparent;
+    border: 2px solid var(--text-dim);
+    opacity: 0.4;
+}
+
 .row-ignored {
     opacity: 0.6;
     background: rgba(0, 0, 0, 0.05);
+}
+
+.row-untracked {
+    opacity: 0.8;
 }
 
 .label-ignored {
@@ -139,6 +149,17 @@ tr:hover td {
     background: var(--border);
     color: var(--text-dim);
     padding: 2px 4px;
+    border-radius: 4px;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+
+.label-untracked {
+    font-size: 8px;
+    background: transparent;
+    border: 1px solid var(--text-dim);
+    color: var(--text-dim);
+    padding: 1px 4px;
     border-radius: 4px;
     margin-right: 4px;
     vertical-align: middle;
@@ -192,15 +213,25 @@ tr:hover td {
     overflow-y: auto;
 }
 
-.url-display {
+.url-display-link {
+    display: block;
+    margin-bottom: 24px;
     font-family: monospace;
     font-size: 12px;
     background: var(--bg-input);
     padding: 12px;
     border-radius: 8px;
     color: var(--accent-cyan);
-    margin-bottom: 24px;
     word-break: break-all;
+    text-decoration: none;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+
+.url-display-link:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--accent-cyan);
+    text-decoration: underline;
 }
 
 .drawer-section {
@@ -280,4 +311,112 @@ tr:hover td {
 .drawer-footer {
     padding: 24px;
     border-top: 1px solid var(--border);
+}
+
+/* Experiment Styles */
+.exp-result {
+    background: rgba(66, 133, 244, 0.05);
+    /* Very subtle blue tint */
+    border: 1px solid rgba(66, 133, 244, 0.2);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 16px;
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.exp-result.hidden {
+    display: none;
+}
+
+.exp-score-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.exp-score-label {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--accent-blue);
+}
+
+.exp-score-val {
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--accent-blue);
+}
+
+.exp-breakdown {
+    margin-top: 8px;
+}
+
+.breakdown-bar-container {
+    height: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+    display: flex;
+    overflow: hidden;
+    margin-bottom: 8px;
+}
+
+.breakdown-bar {
+    height: 100%;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bar-focus {
+    background: var(--accent-blue);
+}
+
+.bar-ambient {
+    background: var(--accent-cyan);
+}
+
+.breakdown-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: var(--text-dim);
+}
+
+.label-focus {
+    color: var(--accent-blue);
+}
+
+.label-ambient {
+    color: var(--accent-cyan);
+}
+
+/* Table Sorting */
+th.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+    position: relative;
+    padding-right: 20px !important;
+}
+
+th.sortable:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.sort-icon::after {
+    content: '⇅';
+    position: absolute;
+    right: 8px;
+    opacity: 0.3;
+    font-size: 10px;
+}
+
+th.sort-asc .sort-icon::after {
+    content: '▲';
+    opacity: 1;
+    color: var(--accent-blue);
+}
+
+th.sort-desc .sort-icon::after {
+    content: '▼';
+    opacity: 1;
+    color: var(--accent-blue);
 }
