@@ -557,6 +557,67 @@ h2 {
     color: var(--accent-cyan);
 }
 
+/* --- Split Action Ignore --- */
+
+.split-ignore-container {
+    position: relative;
+    display: flex;
+    flex-direction: row-reverse;
+    /* Handle on the right, menu expands left */
+    align-items: center;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    max-width: 24px;
+    /* Icon width + padding */
+}
+
+.split-ignore-container:hover {
+    max-width: 120px;
+    /* Expand to show all buttons */
+    background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-ignore-main {
+    flex-shrink: 0;
+    background: transparent !important;
+    border-radius: 0 4px 4px 0 !important;
+}
+
+.split-ignore-menu {
+    display: flex;
+    gap: 4px;
+    padding-left: 4px;
+    opacity: 0;
+    transform: translateX(10px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.split-ignore-container:hover .split-ignore-menu {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.ignore-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    font-size: 11px;
+    white-space: nowrap;
+    transition: all 0.2s;
+}
+
+.ignore-action-btn:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--danger);
+}
+
 /* --- Animations --- */
 @keyframes fadeOutSlide {
     to {

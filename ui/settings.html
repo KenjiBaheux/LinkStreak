@@ -41,6 +41,7 @@
                 <div class="horizontal-nav">
                     <a class="sub-nav-item active" data-target="ranking">Ranking</a>
                     <a class="sub-nav-item" data-target="patterns">Patterns</a>
+                    <a class="sub-nav-item" data-target="poison">Poison</a>
                     <a class="sub-nav-item" data-target="ignored">Blocklist</a>
                 </div>
 
@@ -133,6 +134,23 @@
                         <button id="add-pattern-btn" class="btn-primary">Add</button>
                     </div>
                     <div id="patterns-list" class="data-list"></div>
+                </section>
+
+                <section id="poison" class="settings-section">
+                    <div class="section-title">Poison Keywords</div>
+                    <p class="field-subtext">Penalize links containing specific noise words to avoid irrelevant semantic
+                        matches.</p>
+
+                    <div class="control-group noise-add-box">
+                        <input type="text" id="poison-input" placeholder="e.g. login, sign in...">
+                        <select id="poison-level">
+                            <option value="soft">Minor Noise (0.3x)</option>
+                            <option value="hard">Major Noise (0.1x)</option>
+                            <option value="muted">Muted (0.0x)</option>
+                        </select>
+                        <button id="add-poison-btn" class="btn-primary">Add</button>
+                    </div>
+                    <div id="poison-list" class="data-list"></div>
                 </section>
 
                 <section id="ignored" class="settings-section">
@@ -230,7 +248,10 @@
                     <div id="exp-result-container" class="exp-result hidden">
                         <div class="exp-score-row">
                             <span class="exp-score-label">Semantic Score</span>
-                            <span id="exp-score-val" class="exp-score-val">--%</span>
+                            <div class="exp-score-group">
+                                <span id="exp-score-val" class="exp-score-val">--%</span>
+                                <span id="exp-penalty-icon" class="status-icon penalty-icon hidden" title="">⚠</span>
+                            </div>
                         </div>
                         <div class="exp-breakdown">
                             <div class="breakdown-bar-container">

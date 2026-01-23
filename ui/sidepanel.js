@@ -207,8 +207,9 @@ async function performSearch(query, ambient = null, params = null) {
 
     // 0. Load Weights & Data
     const weights = await window.LinkyStorage.getRankingWeights();
-    const [cache, _] = await Promise.all([
+    const [cache, poisonKeywords, _] = await Promise.all([
         window.LinkyStorage.getMetadataIndex(),
+        window.LinkyStorage.getPoisonKeywords(),
         refreshBrowserData()
     ]);
 
@@ -296,6 +297,19 @@ async function performSearch(query, ambient = null, params = null) {
         if (metaText.length < 60) densityMultiplier *= 0.6; // 40% penalty
         if (!link.description || link.description.trim().length === 0) densityMultiplier *= 0.8; // 20% penalty
 
+        // --- NEW: Poison Multiplier ---
+        let poisonMultiplier = 1.0;
+        const metaLower = metaText.toLowerCase();
+        for (const k of poisonKeywords) {
+            if (metaLower.includes(k.word.toLowerCase())) {
+                if (k.level === 'muted') { poisonMultiplier = 0; break; }
+                if (k.level === 'hard') poisonMultiplier *= 0.1;
+                if (k.level === 'soft') poisonMultiplier *= 0.3;
+            }
+        }
+
+        if (poisonMultiplier === 0) return null;
+
         // --- NEW: Quality Penalization ---
         const health = window.LinkyHealth.calculate(link);
         const qualityScalar = Math.max(0.1, health.score / 100); // Minimum 10% score even for junk
@@ -303,7 +317,7 @@ async function performSearch(query, ambient = null, params = null) {
         // Calculate Final (Normalized to 0-1)
         const totalWeight = wSemantic + wRecency + wFreq + 0.5; // source boost is max 0.5
         const finalScore = (
-            (semanticScore * wSemantic * densityMultiplier) +
+            (semanticScore * wSemantic * densityMultiplier * poisonMultiplier) +
             (recencyScore * wRecency) +
             (freqScore * wFreq) +
             (wSource * 0.5)
@@ -330,7 +344,7 @@ async function performSearch(query, ambient = null, params = null) {
     });
 
     // 5. Store & Sort
-    window.lastSearchResults = rankedResults;
+    window.lastSearchResults = rankedResults.filter(r => r !== null);
     applySortAndRender();
 }
 
@@ -424,9 +438,29 @@ async function handleAddToQueue(link) {
     window.LinkyUI.scrollToBottom();
 }
 
-async function handleIgnoreLink(link, element) {
+async function handleIgnoreLink(link, element, actionType = 'page') {
     await window.LinkyUI.animateRemoval(element);
-    await window.LinkyStorage.blockUrl(link);
+
+    if (actionType === 'site') {
+        await window.LinkyStorage.blockDomain(link);
+
+        // Instant Cleanup: Remove all links from the same domain from current results
+        if (window.lastSearchResults) {
+            try {
+                const domainToBlock = new URL(link.url).hostname;
+                window.lastSearchResults = window.lastSearchResults.filter(item => {
+                    try {
+                        return new URL(item.link.url).hostname !== domainToBlock;
+                    } catch (e) { return true; }
+                });
+                applySortAndRender();
+            } catch (e) {
+                console.error("Cleanup failed:", e);
+            }
+        }
+    } else {
+        await window.LinkyStorage.blockUrl(link);
+    }
 }
 
 async function handleRemoveFromQueue(index, element) {

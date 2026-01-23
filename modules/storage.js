@@ -33,10 +33,27 @@ window.LinkyStorage = {
         const titleToSave = typeof link === 'string' ? 'Unknown Page' : (link.title || 'Unknown Page');
 
         const blocked = await this.getBlockedUrls();
+        // Remove the pattern if it already exists so we can "move" it to the top
+        blocked = blocked.filter(item => item.url !== urlToCheck);
+        // Prepend the new pattern to the beginning of the array
+        blocked.unshift({ url: urlToCheck, title: titleToSave });
+        await chrome.storage.local.set({ blockedUrls: blocked });
+    },
 
-        if (!blocked.some(item => item.url === urlToCheck)) {
-            blocked.push({ url: urlToCheck, title: titleToSave });
-            await chrome.storage.local.set({ blockedUrls: blocked });
+    async blockDomain(link) {
+        const urlToBlock = typeof link === 'string' ? link : link.url;
+        try {
+            const urlObj = new URL(urlToBlock);
+            const domainPattern = `*://${urlObj.hostname}/*`;
+
+            const patterns = await this.getIgnoredPatterns();
+            // Remove the pattern if it already exists so we can "move" it to the top
+            patterns = patterns.filter(p => p !== domainPattern);
+            // Prepend the new pattern to the beginning of the array
+            patterns.unshift(domainPattern);
+            await this.saveIgnoredPatterns(patterns);
+        } catch (e) {
+            console.error("Failed to block domain for URL:", urlToBlock, e);
         }
     },
 
@@ -195,5 +212,23 @@ window.LinkyStorage = {
         const current = await this.getSidepanelUIPrefs();
         const updated = { ...current, ...prefs };
         await chrome.storage.local.set({ sidepanelUIPrefs: updated });
+    },
+
+    async getPoisonKeywords() {
+        const data = await chrome.storage.local.get(['poison_keywords']);
+        if (!data.poison_keywords) {
+            const defaults = [
+                { word: 'login', level: 'soft' },
+                { word: 'ログイン', level: 'soft' },
+                { word: 'sign in', level: 'soft' }
+            ];
+            await this.savePoisonKeywords(defaults);
+            return defaults;
+        }
+        return data.poison_keywords;
+    },
+
+    async savePoisonKeywords(keywords) {
+        await chrome.storage.local.set({ poison_keywords: keywords });
     }
 };

@@ -36,6 +36,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 8. Handle Deep Links
     handleDeepLink();
+
+    // 9. Poison Keywords Initialization
+    const poisonKeywords = await window.LinkyStorage.getPoisonKeywords();
+    renderPoisonList(poisonKeywords);
+    setupPoisonInput();
 });
 
 function handleDeepLink() {
@@ -474,36 +479,70 @@ async function runSemanticExperiment() {
         ambientScore = window.linkyAIEngine.TextEmbedder.cosineSimilarity(mockAmbient, mockPage);
     }
 
-    // 3. Blend & Apply Density Penalty (Aligned with sidepanel.js)
+    // 3. Blend & Apply Penalties (Aligned with sidepanel.js)
     let semanticScore = (focusScore * focusWeight) + (ambientScore * ambientWeight);
 
+    const poisonKeywords = await window.LinkyStorage.getPoisonKeywords();
     const metaText = (liveMeta.title || "") + (liveMeta.description || "") + (liveMeta.headings || "");
-    let densityMultiplier = 1.0;
-    let penaltyReason = "";
+    const metaLower = metaText.toLowerCase();
 
+    let densityMultiplier = 1.0;
+    let poisonMultiplier = 1.0;
+    let penaltyDetails = [];
+
+    // Density Checks
     if (metaText.length < 60) {
         densityMultiplier *= 0.6;
-        penaltyReason = "Sparse Metadata";
+        penaltyDetails.push("Sparse Metadata (-40%)");
     }
-    if (!liveMeta.description) {
+    if (!liveMeta.description || liveMeta.description.trim().length === 0) {
         densityMultiplier *= 0.8;
-        penaltyReason = penaltyReason ? "Sparse + No Desc" : "No Description";
+        penaltyDetails.push("No Description (-20%)");
     }
 
-    const finalScore = semanticScore * densityMultiplier;
+    // Poison Checks
+    for (const k of poisonKeywords) {
+        if (metaLower.includes(k.word.toLowerCase())) {
+            if (k.level === 'muted') {
+                poisonMultiplier = 0;
+                penaltyDetails.push(`Muted: contains "${k.word}"`);
+                break;
+            }
+            if (k.level === 'hard') {
+                poisonMultiplier *= 0.1;
+                penaltyDetails.push(`Major Noise: "${k.word}" (-90%)`);
+            }
+            if (k.level === 'soft') {
+                poisonMultiplier *= 0.3;
+                penaltyDetails.push(`Minor Noise: "${k.word}" (-70%)`);
+            }
+        }
+    }
+
+    const finalScore = semanticScore * densityMultiplier * poisonMultiplier;
 
     // 4. Update UI
     resultContainer.style.opacity = '1';
     const scoreValEl = document.getElementById('exp-score-val');
+    const penaltyIcon = document.getElementById('exp-penalty-icon');
+
     scoreValEl.textContent = `${Math.round(finalScore * 100)}%`;
 
     // Visual indicator of penalty
-    if (densityMultiplier < 1.0) {
+    const totalMultiplier = densityMultiplier * poisonMultiplier;
+    if (totalMultiplier < 1.0) {
         scoreValEl.style.color = 'var(--danger)';
-        scoreValEl.title = `Penalty Applied: ${penaltyReason} (${Math.round((1 - densityMultiplier) * 100)}% reduction)`;
+        penaltyIcon.classList.remove('hidden');
+
+        const reduction = Math.round((1 - totalMultiplier) * 100);
+        const tooltip = `Penalty Applied: ${reduction}% total reduction\n• ` + penaltyDetails.join('\n• ');
+
+        scoreValEl.title = tooltip;
+        penaltyIcon.title = tooltip;
     } else {
         scoreValEl.style.color = 'var(--accent-blue)';
         scoreValEl.title = "";
+        penaltyIcon.classList.add('hidden');
     }
 
     const focusPct = Math.round(focusScore * 100);
@@ -760,4 +799,80 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag]));
+}
+// --- Poison Keywords Logic ---
+
+function setupPoisonInput() {
+    const input = document.getElementById('poison-input');
+    const levelSelect = document.getElementById('poison-level');
+    const btn = document.getElementById('add-poison-btn');
+
+    if (btn) {
+        btn.onclick = async () => {
+            const word = input.value.trim().toLowerCase();
+            const level = levelSelect.value;
+            if (!word) return;
+
+            const keywords = await window.LinkyStorage.getPoisonKeywords();
+            if (!keywords.find(k => k.word === word)) {
+                keywords.push({ word, level });
+                await window.LinkyStorage.savePoisonKeywords(keywords);
+                renderPoisonList(keywords);
+                input.value = '';
+                chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            }
+        };
+    }
+}
+
+function renderPoisonList(keywords) {
+    const container = document.getElementById('poison-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (keywords.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">No poison keywords set.</div>`;
+        return;
+    }
+
+    keywords.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'data-item poison-item';
+        div.innerHTML = `
+            <div class="data-info">
+                <div class="data-title">${escapeHTML(item.word)}</div>
+                <div class="data-url">Toxicity: ${item.level.charAt(0).toUpperCase() + item.level.slice(1)}</div>
+            </div>
+            <div class="poison-actions" style="display: flex; gap: 8px;">
+                <button class="btn-toggle-toxic" title="Change Toxicity Level" style="background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 2px 8px; cursor: pointer; transition: all 0.2s;">☣️</button>
+                <button class="btn-remove" style="background: none; border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); padding: 2px 8px; cursor: pointer; transition: all 0.2s;">Remove</button>
+            </div>
+        `;
+
+        const toggleBtn = div.querySelector('.btn-toggle-toxic');
+        toggleBtn.onclick = async () => {
+            const levels = ['soft', 'hard', 'muted'];
+            const currentIndex = levels.indexOf(item.level);
+            item.level = levels[(currentIndex + 1) % levels.length];
+            await window.LinkyStorage.savePoisonKeywords(keywords);
+            renderPoisonList(keywords);
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+        };
+        // Add hover effects via JS since these are dynamic styles for now
+        toggleBtn.onmouseenter = () => toggleBtn.style.backgroundColor = 'var(--bg-card)';
+        toggleBtn.onmouseleave = () => toggleBtn.style.backgroundColor = 'transparent';
+
+        const removeBtn = div.querySelector('.btn-remove');
+        removeBtn.onclick = async () => {
+            const index = keywords.indexOf(item);
+            keywords.splice(index, 1);
+            await window.LinkyStorage.savePoisonKeywords(keywords);
+            renderPoisonList(keywords);
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+        };
+        removeBtn.onmouseenter = () => { removeBtn.style.backgroundColor = 'var(--danger)'; removeBtn.style.color = 'white'; };
+        removeBtn.onmouseleave = () => { removeBtn.style.backgroundColor = 'transparent'; removeBtn.style.color = 'var(--danger)'; };
+
+        container.appendChild(div);
+    });
 }
