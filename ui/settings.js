@@ -626,7 +626,7 @@ async function runSemanticExperiment() {
     let poisonMultiplier = 1.0;
     let penaltyDetails = [];
 
-    // Density Checks
+    // 1. Density Checks
     if (metaText.length < 60) {
         densityMultiplier *= 0.6;
         penaltyDetails.push("Sparse Metadata (-40%)");
@@ -636,7 +636,7 @@ async function runSemanticExperiment() {
         penaltyDetails.push("No Description (-20%)");
     }
 
-    // Poison Checks
+    // 2. Poison Checks
     for (const k of poisonKeywords) {
         if (metaLower.includes(k.word.toLowerCase())) {
             if (k.level === 'muted') {
@@ -655,7 +655,15 @@ async function runSemanticExperiment() {
         }
     }
 
-    const finalScore = semanticScore * densityMultiplier * poisonMultiplier;
+    // 3. Quality / Health Checks (Aligned with sidepanel.js)
+    const health = window.LinkyHealth.calculate(liveMeta);
+    const qualityScalar = Math.max(0.1, health.score / 100);
+
+    if (qualityScalar < 1.0) {
+        penaltyDetails.push(`Health Penalty: ${health.score}% result quality (-${Math.round((1 - qualityScalar) * 100)}%)`);
+    }
+
+    const finalScore = semanticScore * densityMultiplier * poisonMultiplier * qualityScalar;
 
     // 4. Update UI
     resultContainer.style.opacity = '1';
@@ -665,7 +673,7 @@ async function runSemanticExperiment() {
     scoreValEl.textContent = `${Math.round(finalScore * 100)}%`;
 
     // Visual indicator of penalty
-    const totalMultiplier = densityMultiplier * poisonMultiplier;
+    const totalMultiplier = densityMultiplier * poisonMultiplier * qualityScalar;
     if (totalMultiplier < 1.0) {
         scoreValEl.style.color = 'var(--danger)';
         penaltyIcon.classList.remove('hidden');

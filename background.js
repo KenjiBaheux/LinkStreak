@@ -26,6 +26,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       if (opts.currentWindowLimit) tabsQuery.currentWindow = true;
       if (opts.ignorePinnedTabs) tabsQuery.pinned = false;
 
+      console.log(`[LinkStreak] Retrieval Options:`, opts);
+      console.log(`[LinkStreak] Tabs Query:`, tabsQuery);
+
       // Get current active tab to exclude it
       const [currentTab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const currentUrl = currentTab?.url;
@@ -35,37 +38,50 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         chrome.tabs.query(tabsQuery)
       ]);
 
-      // Filter out current tab by ID and matching current URL
-      const filteredTabs = tabs.filter(t => t.id !== currentTab?.id && t.url !== currentUrl);
-      const rawHistory = history.filter(h => h.url !== currentUrl);
+      console.log(`[LinkStreak] Raw Data: ${tabs.length} tabs, ${history.length} history items (Limit: ${opts.maxHistoryResults})`);
+
+      // Filter out current tab ONLY by ID (allows other tabs with same URL to show)
+      const filteredTabs = tabs.filter(t => {
+        const isCurrent = (t.id === currentTab?.id);
+        if (isCurrent) console.log(`[LinkStreak] Excluding active tab ID: ${t.id} (${t.url})`);
+        return !isCurrent;
+      });
+      // Keep history as-is, let the UI dedup/filter if it wants to hide the current page
+      const rawHistory = history;
+
+      console.log(`[LinkStreak] Available for Search: ${filteredTabs.length} tabs, ${rawHistory.length} raw history items (localOnly: ${opts.localOnly})`);
+      if (rawHistory.length > 0) {
+        console.log(`[LinkStreak] Sample History (First 3):`, rawHistory.slice(0, 3).map(h => ({ url: h.url, isLocal: cache[h.url]?.isLocal })));
+      }
 
       // --- Local History Tagging/Filtering ---
       const processedHistory = await Promise.all(rawHistory.map(async item => {
-        // 1. Check Cache first
-        if (cache[item.url] && cache[item.url].isLocal !== undefined) {
-          item.isLocal = cache[item.url].isLocal;
+        const cached = cache[item.url];
+
+        // 1. If already known to be local, trust the cache (it's sticky)
+        if (cached && cached.isLocal === true) {
+          item.isLocal = true;
         } else {
-          // 2. Query History for visits if not in cache
+          // 2. Otherwise (or if cached as remote), re-check visits to see if a local one exists
           try {
             const visits = await chrome.history.getVisits({ url: item.url });
-            if (visits && visits.length > 0) {
-              item.isLocal = visits[visits.length - 1].isLocal;
-              // 3. Cache the result
-              cache[item.url] = { ...(cache[item.url] || {}), isLocal: item.isLocal };
-            } else {
-              item.isLocal = true; // Fallback to local if no visits (shouldn't happen)
-            }
+            item.isLocal = (visits || []).some(v => v.isLocal === true);
+
+            // 3. Update cache (remote items will be re-checked next time until they become local)
+            cache[item.url] = { ...(cached || {}), isLocal: item.isLocal };
           } catch (e) {
-            item.isLocal = true;
+            item.isLocal = true; // Fallback
           }
         }
 
-        // Return item if we don't care about local-only, or if it IS local
-        if (!opts.localOnly) return item;
-        return item.isLocal ? item : null;
+        if (opts.localOnly && !item.isLocal) {
+          return null;
+        }
+        return item;
       }));
 
       const filteredHistory = processedHistory.filter(h => h !== null);
+      console.log(`[LinkStreak] History: Raw=${rawHistory.length}, Final=${filteredHistory.length}, localOnly=${opts.localOnly}`);
 
       // Persist the updated cache with isLocal flags if we updated anything
       await chrome.storage.local.set({ [VECTOR_CACHE_KEY]: cache });
