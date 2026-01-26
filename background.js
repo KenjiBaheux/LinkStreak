@@ -7,12 +7,19 @@ let lastSelection = null;
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "get-browser-data") {
     chrome.storage.local.get(['retrievalOptions', VECTOR_CACHE_KEY]).then(async data => {
-      const opts = data.retrievalOptions || {
+      const storedOpts = data.retrievalOptions || {
         maxHistoryResults: 150,
         currentWindowLimit: false,
         ignorePinnedTabs: true,
         localOnly: false
       };
+
+      // Merge stored options with any request-specific overrides (from Link Inspector)
+      const opts = {
+        ...storedOpts,
+        ...(request.options || {})
+      };
+
       const cache = data[VECTOR_CACHE_KEY] || {};
 
       const tabsQuery = { windowType: 'normal' };
@@ -30,37 +37,38 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
       // Filter out current tab by ID and matching current URL
       const filteredTabs = tabs.filter(t => t.id !== currentTab?.id && t.url !== currentUrl);
-      let filteredHistory = history.filter(h => h.url !== currentUrl);
+      const rawHistory = history.filter(h => h.url !== currentUrl);
 
-      // --- Local History Only Filter ---
-      if (opts.localOnly) {
-        const checks = await Promise.all(filteredHistory.map(async item => {
-          // 1. Check Cache first
-          if (cache[item.url] && cache[item.url].isLocal !== undefined) {
-            return cache[item.url].isLocal ? item : null;
-          }
-
-          // 2. Query History for visits
+      // --- Local History Tagging/Filtering ---
+      const processedHistory = await Promise.all(rawHistory.map(async item => {
+        // 1. Check Cache first
+        if (cache[item.url] && cache[item.url].isLocal !== undefined) {
+          item.isLocal = cache[item.url].isLocal;
+        } else {
+          // 2. Query History for visits if not in cache
           try {
             const visits = await chrome.history.getVisits({ url: item.url });
-            if (!visits || visits.length === 0) return null;
-
-            const isLocal = visits[visits.length - 1].isLocal;
-
-            // 3. Cache the result (update existing or create minimal entry)
-            cache[item.url] = { ...(cache[item.url] || {}), isLocal };
-
-            return isLocal ? item : null;
+            if (visits && visits.length > 0) {
+              item.isLocal = visits[visits.length - 1].isLocal;
+              // 3. Cache the result
+              cache[item.url] = { ...(cache[item.url] || {}), isLocal: item.isLocal };
+            } else {
+              item.isLocal = true; // Fallback to local if no visits (shouldn't happen)
+            }
           } catch (e) {
-            return null;
+            item.isLocal = true;
           }
-        }));
+        }
 
-        filteredHistory = checks.filter(h => h !== null);
+        // Return item if we don't care about local-only, or if it IS local
+        if (!opts.localOnly) return item;
+        return item.isLocal ? item : null;
+      }));
 
-        // Persist the updated cache with isLocal flags
-        await chrome.storage.local.set({ [VECTOR_CACHE_KEY]: cache });
-      }
+      const filteredHistory = processedHistory.filter(h => h !== null);
+
+      // Persist the updated cache with isLocal flags if we updated anything
+      await chrome.storage.local.set({ [VECTOR_CACHE_KEY]: cache });
 
       sendResponse({ history: filteredHistory, tabs: filteredTabs });
     });

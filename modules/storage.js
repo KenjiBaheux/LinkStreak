@@ -32,7 +32,7 @@ window.LinkyStorage = {
         const urlToCheck = typeof link === 'string' ? link : link.url;
         const titleToSave = typeof link === 'string' ? 'Unknown Page' : (link.title || 'Unknown Page');
 
-        const blocked = await this.getBlockedUrls();
+        let blocked = await this.getBlockedUrls();
         // Remove the pattern if it already exists so we can "move" it to the top
         blocked = blocked.filter(item => item.url !== urlToCheck);
         // Prepend the new pattern to the beginning of the array
@@ -46,7 +46,7 @@ window.LinkyStorage = {
             const urlObj = new URL(urlToBlock);
             const domainPattern = `*://${urlObj.hostname}/*`;
 
-            const patterns = await this.getIgnoredPatterns();
+            let patterns = await this.getIgnoredPatterns();
             // Remove the pattern if it already exists so we can "move" it to the top
             patterns = patterns.filter(p => p !== domainPattern);
             // Prepend the new pattern to the beginning of the array
