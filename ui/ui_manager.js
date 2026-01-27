@@ -139,8 +139,15 @@ window.LinkyUI = {
                     <div class="detail-row ${getStyle('source')}"><span>Source</span> <span class="detail-val">${link.sourceType}</span></div>
                 </div>
                 <div class="details-actions">
+                    <!-- Split Action Ignore Button -->
+                    <div class="split-ignore-container">
+                        <button class="feedback-btn btn-ignore-main" title="Ignore options">🚫</button>
+                        <div class="split-ignore-menu">
+                        <button class="ignore-action-btn btn-ignore-site" title="Ignore all results from this site">🌐</button>
+                        <button class="ignore-action-btn btn-ignore-page" title="Never show this specific page again">📄</button>
+                        </div>
+                    </div>
                     <button class="feedback-btn btn-debug" title="Inspect link health and metadata">🐞</button>
-                    <button class="feedback-btn btn-ignore" title="Never show again">🚫</button>
                 </div>
             </div>` : ''}
         `;
@@ -158,23 +165,29 @@ window.LinkyUI = {
             div.classList.remove('dragging');
         });
 
-        // Hover Delay Logic
+        // Hover Delay & Stickiness Logic
         let hoverTimer = null;
+        let leaveTimer = null;
+
         div.addEventListener('mouseenter', () => {
             if (div.classList.contains('dragging')) return;
+            if (leaveTimer) clearTimeout(leaveTimer);
 
             hoverTimer = setTimeout(() => {
                 const details = div.querySelector('.result-details');
                 if (details && !div.classList.contains('dragging')) {
                     details.classList.add('visible');
                 }
-            }, 800); // 600ms Delay
+            }, 800);
         });
 
         div.addEventListener('mouseleave', () => {
             if (hoverTimer) clearTimeout(hoverTimer);
-            const details = div.querySelector('.result-details');
-            if (details) details.classList.remove('visible');
+
+            leaveTimer = setTimeout(() => {
+                const details = div.querySelector('.result-details');
+                if (details) details.classList.remove('visible');
+            }, 2000); // 2s sticky delay
         });
 
         div.querySelector('.btn-debug').onclick = (e) => {
@@ -183,12 +196,34 @@ window.LinkyUI = {
             window.open(targetUrl, '_blank');
         };
 
-        div.querySelector('.btn-ignore').onclick = (e) => {
-            e.stopPropagation();
-            onIgnore(link, div);
-        };
+        const btnIgnoreMain = div.querySelector('.btn-ignore-main');
+        const btnIgnorePage = div.querySelector('.btn-ignore-page');
+        const btnIgnoreSite = div.querySelector('.btn-ignore-site');
 
-        div.onclick = () => onAdd(link);
+        if (btnIgnoreMain) {
+            btnIgnoreMain.onclick = (e) => {
+                e.stopPropagation();
+            };
+        }
+
+        if (btnIgnorePage) {
+            btnIgnorePage.onclick = (e) => {
+                e.stopPropagation();
+                onIgnore(link, div, 'page');
+            };
+        }
+
+        if (btnIgnoreSite) {
+            btnIgnoreSite.onclick = (e) => {
+                e.stopPropagation();
+                onIgnore(link, div, 'site');
+            };
+        }
+
+        div.onclick = (e) => {
+            if (e.target.closest('.feedback-btn') || e.target.closest('.ignore-action-btn')) return;
+            onAdd(link);
+        };
         return div;
     },
 

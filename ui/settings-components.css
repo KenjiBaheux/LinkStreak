@@ -162,7 +162,8 @@ input[type=range] {
     text-align: right;
 }
 
-.pattern-add-box {
+/* Inputs & Forms */
+.control-group {
     display: flex;
     gap: 12px;
     background: var(--bg-card);
@@ -170,15 +171,39 @@ input[type=range] {
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 16px;
+    align-items: center;
 }
 
-.pattern-add-box input {
-    flex: 1;
+.control-group input,
+.control-group select {
     background: var(--bg-input);
     border: 1px solid var(--border);
     color: white;
     padding: 10px;
     border-radius: 8px;
+    outline: none;
+    font-family: inherit;
+    font-size: 13px;
+    transition: border-color 0.2s;
+}
+
+.control-group input {
+    flex: 1;
+}
+
+.control-group select {
+    cursor: pointer;
+    min-width: 150px;
+}
+
+.control-group input:focus,
+.control-group select:focus {
+    border-color: var(--accent-cyan);
+}
+
+.control-group .btn-primary {
+    width: auto; /* Prevent full width in horizontal forms */
+    padding: 10px 20px;
 }
 
 /* Tabs & Animations */

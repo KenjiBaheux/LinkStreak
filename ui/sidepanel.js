@@ -205,133 +205,208 @@ async function performSearch(query, ambient = null, params = null) {
 
     resultsList.innerHTML = `<div class="analyzing-text">AI is mapping context...</div>`;
 
-    // 0. Load Weights & Data
-    const weights = await window.LinkyStorage.getRankingWeights();
-    const [cache, _] = await Promise.all([
-        window.LinkyStorage.getMetadataIndex(),
-        refreshBrowserData()
-    ]);
+    try {
+        console.log(`[LinkStreak Search] Triggered search for query: "${query}"`);
+        // 0. Load Weights & Data
+        const weights = await window.LinkyStorage.getRankingWeights();
+        const [cache, poisonKeywords, _] = await Promise.all([
+            window.LinkyStorage.getMetadataIndex(),
+            window.LinkyStorage.getPoisonKeywords(),
+            refreshBrowserData()
+        ]);
 
-    // flattened list with source type tagged and METADATA merged
-    const allLinks = [
-        ...currentBrowserData.tabs.map(t => ({ ...t, sourceType: 'tabs' })),
-        ...currentBrowserData.history.map(h => ({ ...h, sourceType: 'history' })),
-        ...(currentBrowserData.bookmarks || []).map(b => ({ ...b, sourceType: 'bookmarks' }))
-    ].map(link => {
-        const meta = cache[link.url];
-        return meta ? { ...link, ...meta, isTracked: true } : { ...link, isTracked: false };
-    });
-
-    // 1. Filter by Active Sources & Source Weights first
-    // This prevents a disabled source (e.g. Tabs) from "blocking" an enabled source (e.g. History) during dedup
-    const sourceMatchedLinks = allLinks.filter(link => {
-        // Check UI Toggle
-        const filterBtn = document.querySelector(`.filter-btn[data-source="${link.sourceType}"]`);
-        if (filterBtn && !filterBtn.classList.contains('active')) return false;
-
-        // Check Source Weight
-        const sourceWeight = weights.sources[link.sourceType] || 0;
-        if (sourceWeight === 0) return false;
-
-        return true;
-    });
-
-    // 2. Dedup (keeps the first occurrence, which respects the [Tabs, History, Bookmarks] priority order)
-    const uniqueLinks = sourceMatchedLinks.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
-
-    // 3. Filter Ignored & Indexed-Only
-    const checks = await Promise.all(uniqueLinks.map(async link => {
-        const isIgnored = await window.LinkyStorage.isUrlIgnored(link.url);
-
-        // Check "Indexed" filter
-        const trackedOnlyBtn = document.querySelector('.filter-btn[data-source="trackedOnly"]');
-        if (trackedOnlyBtn && trackedOnlyBtn.classList.contains('active') && !link.isTracked) return null;
-
-        return isIgnored ? null : link;
-    }));
-
-    const validLinks = checks.filter(link => link !== null);
-
-    if (validLinks.length === 0) {
-        resultsList.innerHTML = `<div class="empty-state"><p>No results match your filters.</p></div>`;
-        return;
-    }
-
-    // 4. AI Semantic Search
-    let aiResults;
-    if (ambient) {
-        aiResults = await window.linkyAIEngine.searchWithContext(query, ambient, {
-            links: validLinks,
-            focusWeight: params?.focusWeight,
-            contextWeight: params?.contextWeight
+        // flattened list with source type tagged and METADATA merged
+        const allLinks = [
+            ...currentBrowserData.tabs.map(t => ({ ...t, sourceType: 'tabs' })),
+            ...currentBrowserData.history.map(h => ({ ...h, sourceType: 'history' })),
+            ...(currentBrowserData.bookmarks || []).map(b => ({ ...b, sourceType: 'bookmarks' }))
+        ].map(link => {
+            const meta = cache[link.url];
+            return meta ? { ...link, ...meta, isTracked: true } : { ...link, isTracked: false };
         });
-    } else {
-        // Keyword / Zero-Shot
-        aiResults = await window.linkyAIEngine.findRelevantLinks(query, validLinks);
-    }
 
-    // 4. Weighted Re-Ranking
-    const rankedResults = aiResults.map(item => {
-        const link = item.link;
-        const semanticScore = item.score; // 0 to 1
+        console.log(`[LinkStreak Search] Initial links pool: ${allLinks.length}`);
 
-        // Normalize Recency (0 to 1) - Exponential decay
-        const now = Date.now();
-        const daysSince = (now - (link.lastVisitTime || now)) / (1000 * 60 * 60 * 24);
-        const recencyScore = Math.exp(-0.2 * daysSince);
-
-        // Normalize Frequency (0 to 1) - Log scale
-        const visits = link.visitCount || 1;
-        const freqScore = Math.min(Math.log10(visits) / 2, 1);
-
-        // Apply User Weights (0-100 mapped to 0-1 multipliers)
-        const wSemantic = (weights.signals.semantic / 100);
-        const wRecency = (weights.signals.recency / 100);
-        const wFreq = (weights.signals.frequency / 100);
-        const wSource = (weights.sources[link.sourceType] || 0) / 100;
-
-        // --- NEW: Density Penalty ---
-        const metaText = (link.title || "") + (link.description || "") + (link.headings || link.h1 || "");
-        let densityMultiplier = 1.0;
-        if (metaText.length < 60) densityMultiplier *= 0.6; // 40% penalty
-        if (!link.description || link.description.trim().length === 0) densityMultiplier *= 0.8; // 20% penalty
-
-        // --- NEW: Quality Penalization ---
-        const health = window.LinkyHealth.calculate(link);
-        const qualityScalar = Math.max(0.1, health.score / 100); // Minimum 10% score even for junk
-
-        // Calculate Final (Normalized to 0-1)
-        const totalWeight = wSemantic + wRecency + wFreq + 0.5; // source boost is max 0.5
-        const finalScore = (
-            (semanticScore * wSemantic * densityMultiplier) +
-            (recencyScore * wRecency) +
-            (freqScore * wFreq) +
-            (wSource * 0.5)
-        ) / totalWeight * qualityScalar;
-
-        return {
-            ...item,
-            finalScore,
-            components: {
-                semanticRaw: semanticScore,
-                semantic: semanticScore * densityMultiplier,
-                densityMultiplier: densityMultiplier,
-                recency: recencyScore,
-                frequency: freqScore,
-                sourceBoost: wSource
-            },
-            componentWeights: {
-                semantic: weights.signals.semantic,
-                recency: weights.signals.recency,
-                frequency: weights.signals.frequency,
-                source: weights.sources[link.sourceType] || 0
-            }
+        const audit = {
+            sourceDisabled: 0,
+            sourceWeightZero: 0,
+            ignored: 0,
+            notIndexed: 0,
+            kept: { tabs: 0, history: 0, bookmarks: 0 }
         };
-    });
 
-    // 5. Store & Sort
-    window.lastSearchResults = rankedResults;
-    applySortAndRender();
+        // 1. Filter by Active Sources & Source Weights first
+        const sourceMatchedLinks = allLinks.filter(link => {
+            const filterBtn = document.querySelector(`.filter-btn[data-source="${link.sourceType}"]`);
+            if (filterBtn && !filterBtn.classList.contains('active')) {
+                audit.sourceDisabled++;
+                return false;
+            }
+
+            const sourceWeight = weights.sources[link.sourceType] || 0;
+            if (sourceWeight <= 0) {
+                audit.sourceWeightZero++;
+                return false;
+            }
+            return true;
+        });
+
+        // 2. Dedup
+        const uniqueLinks = sourceMatchedLinks.filter((v, i, a) => a.findIndex(t => (t.url === v.url)) === i);
+
+        // 3. Filter Ignored & Indexed-Only
+        const trackedOnlyBtn = document.querySelector('.filter-btn[data-source="trackedOnly"]');
+        const isTrackedOnly = trackedOnlyBtn && trackedOnlyBtn.classList.contains('active');
+
+        const checks = await Promise.all(uniqueLinks.map(async link => {
+            const isIgnored = await window.LinkyStorage.isUrlIgnored(link.url);
+            if (isIgnored) {
+                audit.ignored++;
+                return null;
+            }
+
+            if (isTrackedOnly && !link.isTracked) {
+                audit.notIndexed++;
+                return null;
+            }
+
+            audit.kept[link.sourceType]++;
+            return link;
+        }));
+
+        const validLinks = checks.filter(link => link !== null);
+
+        console.warn(`[LinkStreak Search] SEARCH AUDIT SUMMARY:`);
+        if (isTrackedOnly) {
+            console.warn(`[LinkStreak Search] !! 'TRACKED ONLY' FILTER IS ACTIVE !! (This hides most history until it's indexed)`);
+        }
+        console.table({
+            "Initial Pool": allLinks.length,
+            "Dropped (Source UI Off)": audit.sourceDisabled,
+            "Dropped (Weight 0%)": audit.sourceWeightZero,
+            "Dropped (Ignored/Blocked)": audit.ignored,
+            "Dropped (Not Indexed)": audit.notIndexed,
+            "FINAL FOR AI": validLinks.length
+        });
+        console.log(`[LinkStreak Search] Composition:`, audit.kept);
+
+        if (validLinks.length > 0) {
+            console.log(`[LinkStreak Search] Top 3 Survivors:`, validLinks.slice(0, 3).map(l => l.url));
+        }
+
+        if (validLinks.length === 0) {
+            resultsList.innerHTML = `<div class="empty-state"><p>No results match your filters.</p></div>`;
+            return;
+        }
+
+        // 4. AI Semantic Search
+        let aiResults;
+        if (ambient) {
+            aiResults = await window.linkyAIEngine.searchWithContext(query, ambient, {
+                links: validLinks,
+                focusWeight: params?.focusWeight,
+                contextWeight: params?.contextWeight
+            });
+        } else {
+            // Keyword / Zero-Shot
+            aiResults = await window.linkyAIEngine.findRelevantLinks(query, validLinks);
+        }
+
+        // 4. Weighted Re-Ranking
+        const rankedResults = aiResults.map(item => {
+            const link = item.link;
+            const semanticScore = item.score; // 0 to 1
+
+            // Normalize Recency (0 to 1) - Exponential decay
+            const now = Date.now();
+            const daysSince = (now - (link.lastVisitTime || now)) / (1000 * 60 * 60 * 24);
+            const recencyScore = Math.exp(-0.2 * daysSince);
+
+            // Normalize Frequency (0 to 1) - Log scale
+            const visits = link.visitCount || 1;
+            const freqScore = Math.min(Math.log10(visits) / 2, 1);
+
+            // Apply User Weights (0-100 mapped to 0-1 multipliers)
+            const wSemantic = (weights.signals.semantic / 100);
+            const wRecency = (weights.signals.recency / 100);
+            const wFreq = (weights.signals.frequency / 100);
+            const wSource = (weights.sources[link.sourceType] || 0) / 100;
+
+            // --- NEW: Density Penalty ---
+            const metaText = (link.title || "") + (link.description || "") + (link.headings || link.h1 || "");
+            let densityMultiplier = 1.0;
+            if (metaText.length < 60) densityMultiplier *= 0.6; // 40% penalty
+            if (!link.description || link.description.trim().length === 0) densityMultiplier *= 0.8; // 20% penalty
+
+            // --- NEW: Poison Multiplier ---
+            let poisonMultiplier = 1.0;
+            const metaLower = metaText.toLowerCase();
+            for (const k of poisonKeywords) {
+                if (metaLower.includes(k.word.toLowerCase())) {
+                    if (k.level === 'muted') { poisonMultiplier = 0; break; }
+                    if (k.level === 'hard') poisonMultiplier *= 0.1;
+                    if (k.level === 'soft') poisonMultiplier *= 0.3;
+                }
+            }
+
+            if (poisonMultiplier === 0) {
+                console.log(`[LinkStreak Search] Ranking Trace: Dropped (Poisoned): ${link.url}`);
+                return null;
+            }
+
+            // --- NEW: Quality Penalization ---
+            const health = window.LinkyHealth.calculate(link);
+            const qualityScalar = Math.max(0.1, health.score / 100); // Minimum 10% score even for junk
+
+            // Calculate Final (Normalized to 0-1)
+            const totalWeight = wSemantic + wRecency + wFreq + 0.5; // source boost is max 0.5
+            const finalScore = (
+                (semanticScore * wSemantic * densityMultiplier * poisonMultiplier) +
+                (recencyScore * wRecency) +
+                (freqScore * wFreq) +
+                (wSource * 0.5)
+            ) / totalWeight * qualityScalar;
+
+            if (finalScore < 0.1) {
+                console.log(`[LinkStreak Search] Ranking Trace: Low Final Score (${Math.round(finalScore * 100)}%): ${link.url}`);
+            }
+
+            return {
+                ...item,
+                finalScore,
+                components: {
+                    semanticRaw: semanticScore,
+                    semantic: semanticScore * densityMultiplier,
+                    densityMultiplier: densityMultiplier,
+                    recency: recencyScore,
+                    frequency: freqScore,
+                    sourceBoost: wSource
+                },
+                componentWeights: {
+                    semantic: weights.signals.semantic,
+                    recency: weights.signals.recency,
+                    frequency: weights.signals.frequency,
+                    source: weights.sources[link.sourceType] || 0
+                }
+            };
+        });
+
+        // 5. Store & Sort
+        window.lastSearchResults = rankedResults.filter(r => r !== null);
+        console.log(`[LinkStreak Search] AI Processing complete: ${window.lastSearchResults.length} results.`);
+        if (window.lastSearchResults.length > 0) {
+            console.log(`[LinkStreak Search] Top 3 Hits:`, window.lastSearchResults.slice(0, 3).map(r => ({
+                url: r.link.url,
+                score: r.finalScore,
+                semantic: r.components.semantic
+            })));
+        }
+        applySortAndRender();
+        console.log(`[LinkStreak Search] Render finished.`);
+    } catch (err) {
+        console.error(`[LinkStreak Search] Critical Error:`, err);
+        resultsList.innerHTML = `<div class="error-state"><p>Analysis failed. Check console for details.</p></div>`;
+    }
 }
 
 function applySortAndRender() {
@@ -424,9 +499,29 @@ async function handleAddToQueue(link) {
     window.LinkyUI.scrollToBottom();
 }
 
-async function handleIgnoreLink(link, element) {
+async function handleIgnoreLink(link, element, actionType = 'page') {
     await window.LinkyUI.animateRemoval(element);
-    await window.LinkyStorage.blockUrl(link);
+
+    if (actionType === 'site') {
+        await window.LinkyStorage.blockDomain(link);
+
+        // Instant Cleanup: Remove all links from the same domain from current results
+        if (window.lastSearchResults) {
+            try {
+                const domainToBlock = new URL(link.url).hostname;
+                window.lastSearchResults = window.lastSearchResults.filter(item => {
+                    try {
+                        return new URL(item.link.url).hostname !== domainToBlock;
+                    } catch (e) { return true; }
+                });
+                applySortAndRender();
+            } catch (e) {
+                console.error("Cleanup failed:", e);
+            }
+        }
+    } else {
+        await window.LinkyStorage.blockUrl(link);
+    }
 }
 
 async function handleRemoveFromQueue(index, element) {
@@ -461,6 +556,7 @@ async function refreshBrowserData() {
     currentBrowserData.tabs = browserData.tabs || [];
     currentBrowserData.history = browserData.history || [];
     currentBrowserData.bookmarks = browserData.bookmarks || [];
+    console.log(`[LinkStreak Search] Refreshed Browser Data: ${currentBrowserData.tabs.length} tabs, ${currentBrowserData.history.length} history, ${currentBrowserData.bookmarks.length} bookmarks`);
 }
 
 async function handlePageIndexing(request) {

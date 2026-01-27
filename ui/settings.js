@@ -36,6 +36,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 8. Handle Deep Links
     handleDeepLink();
+
+    // 9. Poison Keywords Initialization
+    const poisonKeywords = await window.LinkyStorage.getPoisonKeywords();
+    renderPoisonList(poisonKeywords);
+    setupPoisonInput();
 });
 
 function handleDeepLink() {
@@ -109,7 +114,7 @@ function setupNavigation() {
 let inspectorData = {};
 let currentEditingUrl = null;
 let isDrawerDirty = false;
-let currentSort = { key: 'title', direction: 'asc' };
+let currentSort = { key: 'lastVisitTime', direction: 'desc' };
 
 async function initInspector() {
     const refreshBtn = document.getElementById('refresh-inspector');
@@ -145,6 +150,28 @@ async function initInspector() {
         };
     }
 
+    const sourceFilter = document.getElementById('inspector-source-filter');
+    if (sourceFilter) {
+        sourceFilter.onchange = () => {
+            const localContainer = document.getElementById('inspector-local-container');
+            if (localContainer) {
+                // Show local-only toggle for 'all' or 'history'
+                const val = sourceFilter.value;
+                localContainer.style.display = (val === 'all' || val === 'history') ? 'flex' : 'none';
+            }
+            const searchInput = document.getElementById('inspector-search');
+            renderLinkInspector(searchInput?.value.toLowerCase() || "");
+        };
+    }
+
+    const localFilter = document.getElementById('inspector-local-only');
+    if (localFilter) {
+        localFilter.onchange = () => {
+            const searchInput = document.getElementById('inspector-search');
+            renderLinkInspector(searchInput?.value.toLowerCase() || "");
+        };
+    }
+
     // Table Sorting Listeners
     const headers = document.querySelectorAll('#inspector-table th.sortable');
     headers.forEach(header => {
@@ -169,6 +196,12 @@ async function initInspector() {
             renderLinkInspector(searchInput?.value.toLowerCase() || "");
         };
     });
+
+    // Initial Sort UI Highlight
+    const defaultHeader = Array.from(headers).find(h => h.dataset.sort === currentSort.key);
+    if (defaultHeader) {
+        defaultHeader.classList.add(currentSort.direction === 'asc' ? 'sort-asc' : 'sort-desc');
+    }
 
     if (saveBtn) {
         saveBtn.onclick = handleSaveMetadata;
@@ -220,33 +253,59 @@ async function renderLinkInspector(filterQuery = "") {
     const container = document.getElementById('inspector-body');
     if (!container) return;
 
+    const sourceFilterVal = document.getElementById('inspector-source-filter')?.value || 'all';
+    const localOnly = document.getElementById('inspector-local-only')?.checked || false;
+    const showIgnored = document.getElementById('show-ignored-toggle')?.checked || false;
+
     // 1. Fetch live and cached data
     const [cache, browserData] = await Promise.all([
         window.LinkyStorage.getMetadataIndex(),
-        chrome.runtime.sendMessage({ action: "get-browser-data" })
+        chrome.runtime.sendMessage({
+            action: "get-browser-data",
+            options: { localOnly: localOnly } // Let background do the heavy lifting
+        })
     ]);
 
-    const showIgnored = document.getElementById('show-ignored-toggle')?.checked || false;
-    inspectorData = cache;
+    // 2. Merge Data
+    const sources = {
+        tabs: (browserData.tabs || []).map(t => ({ ...t, sourceType: 'tabs' })),
+        history: (browserData.history || []).map(h => ({ ...h, sourceType: 'history' })),
+        bookmarks: (browserData.bookmarks || []).map(b => ({ ...b, sourceType: 'bookmarks' }))
+    };
 
+    inspectorData = cache;
     container.innerHTML = '';
 
-    // 2. Merge Data
-    const liveLinks = [
-        ...(browserData.tabs || []),
-        ...(browserData.history || []),
-        ...(browserData.bookmarks || [])
-    ];
+    // Create a unified set of URLs based on source filter
+    let liveLinks = [];
+    if (sourceFilterVal === 'all') {
+        // Prioritize History for better metadata, then Tabs, then Bookmarks
+        liveLinks = [...sources.history, ...sources.tabs, ...sources.bookmarks];
+    } else {
+        liveLinks = sources[sourceFilterVal] || [];
+    }
 
-    // Create a unified set of URLs
-    const allUrls = new Set([...Object.keys(cache), ...liveLinks.map(l => l.url)]);
+    // Create a Map for O(1) lookup of live data
+    const liveMap = new Map();
+    liveLinks.forEach(l => {
+        if (!liveMap.has(l.url)) liveMap.set(l.url, l);
+    });
+
+    const allUrls = new Set();
+    if (sourceFilterVal === 'all') {
+        Object.keys(cache).forEach(url => allUrls.add(url));
+    }
+    liveLinks.forEach(l => allUrls.add(l.url));
+
     const filteredResults = [];
     const query = filterQuery.trim().toLowerCase();
 
     for (const url of allUrls) {
         let isMatch = false;
+        const live = liveMap.get(url) || {};
         // Prefer cache, then live data
-        const meta = cache[url] || liveLinks.find(l => l.url === url) || { url };
+        const meta = cache[url] || live || { url };
+
         const title = (meta.title || "").toLowerCase();
         const description = (meta.description || "").toLowerCase();
         const headings = (meta.headings || meta.h1 || "").toLowerCase();
@@ -273,12 +332,25 @@ async function renderLinkInspector(filterQuery = "") {
         const isIgnored = await window.LinkyStorage.isUrlIgnored(url);
         if (isIgnored && !showIgnored) continue;
 
+        // Apply Local Only Filter manually for cached items not in current live results
+        if (localOnly) {
+            const cacheStatus = cache[url]?.isLocal;
+            const liveStatus = live.isLocal;
+            // If we have data saying it is NOT local, skip it
+            if (cacheStatus === false || liveStatus === false) continue;
+        }
+
+        const lastVisitTime = live.lastVisitTime || 0;
+        const visitCount = live.visitCount || 0;
+
         filteredResults.push({
             url,
             meta,
             isIgnored,
             isTracked: !!cache[url],
-            health: window.LinkyHealth.calculate(meta) // Calculate once for sorting
+            health: window.LinkyHealth.calculate(meta),
+            lastVisitTime,
+            visitCount
         });
     }
 
@@ -299,6 +371,14 @@ async function renderLinkInspector(filterQuery = "") {
                 valA = a.url.toLowerCase();
                 valB = b.url.toLowerCase();
                 break;
+            case 'lastVisitTime':
+                valA = a.lastVisitTime || 0;
+                valB = b.lastVisitTime || 0;
+                break;
+            case 'visitCount':
+                valA = a.visitCount || 0;
+                valB = b.visitCount || 0;
+                break;
             case 'health':
                 valA = a.health.score;
                 valB = b.health.score;
@@ -318,7 +398,7 @@ async function renderLinkInspector(filterQuery = "") {
         return;
     }
 
-    filteredResults.forEach(({ url, meta, isIgnored, isTracked, health }) => {
+    filteredResults.forEach(({ url, meta, isIgnored, isTracked, health, lastVisitTime, visitCount }) => {
         let statusClass = 'untracked';
 
         if (isTracked) {
@@ -331,18 +411,59 @@ async function renderLinkInspector(filterQuery = "") {
 
         tr.innerHTML = `
             <td class="col-status"><span class="status-dot ${statusClass}" title="${isTracked ? 'Tracked' : 'Untracked'}"></span></td>
+            <td class="col-last-visited">${lastVisitTime ? new Date(lastVisitTime).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' }) : '--'}</td>
             <td class="col-title">
                 ${isIgnored ? '<span class="label-ignored">IGNORED</span> ' : ''}
                 ${!isTracked ? '<span class="label-untracked">UNTRACKED</span> ' : ''}
                 ${escapeHTML(meta.title || "Untitled")}
             </td>
-            <td class="col-url">${escapeHTML(url)}</td>
+            <td class="col-url">
+                <div class="url-with-actions">
+                    <span class="url-text">${escapeHTML(url)}</span>
+                    <div class="split-ignore-container">
+                        <button class="feedback-btn btn-ignore-main" title="Ignore options">🚫</button>
+                        <div class="split-ignore-menu">
+                            <button class="ignore-action-btn btn-ignore-site" title="Ignore all results from this site">🌐</button>
+                            <button class="ignore-action-btn btn-ignore-page" title="Never show this specific page again">📄</button>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td class="col-visits">${visitCount || '--'}</td>
             <td class="col-health" style="color: ${!isTracked || isIgnored ? 'var(--text-dim)' : (statusClass === 'green' ? 'var(--accent-green)' : (statusClass === 'yellow' ? '#fbbf24' : 'var(--danger)'))}">
                 ${!isTracked || isIgnored ? '--' : health.score + '%'}
             </td>
         `;
 
-        tr.onclick = () => openInspectorDrawer(url, meta);
+        // Blocking Logic for Table
+        const btnIgnoreMain = tr.querySelector('.btn-ignore-main');
+        const btnIgnorePage = tr.querySelector('.btn-ignore-page');
+        const btnIgnoreSite = tr.querySelector('.btn-ignore-site');
+
+        if (btnIgnoreMain) btnIgnoreMain.onclick = (e) => e.stopPropagation();
+
+        if (btnIgnorePage) {
+            btnIgnorePage.onclick = async (e) => {
+                e.stopPropagation();
+                await window.LinkyStorage.blockUrl(url);
+                renderLinkInspector(document.getElementById('inspector-search')?.value.toLowerCase() || "");
+                chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            };
+        }
+
+        if (btnIgnoreSite) {
+            btnIgnoreSite.onclick = async (e) => {
+                e.stopPropagation();
+                await window.LinkyStorage.blockDomain({ url });
+                renderLinkInspector(document.getElementById('inspector-search')?.value.toLowerCase() || "");
+                chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            };
+        }
+
+        tr.onclick = (e) => {
+            if (e.target.closest('.split-ignore-container')) return;
+            openInspectorDrawer(url, meta);
+        };
         container.appendChild(tr);
     });
 }
@@ -353,6 +474,26 @@ function openInspectorDrawer(url, meta) {
     isDrawerDirty = false; // Reset dirty state on open/refresh
     const drawer = document.getElementById('inspector-drawer');
     drawer.classList.remove('hidden');
+
+    const urlDisplayContainer = drawer.querySelector('.url-display-container');
+    if (urlDisplayContainer) {
+        // Setup Blocking Logic for Drawer (Static HTML now)
+        urlDisplayContainer.querySelector('.btn-ignore-main').onclick = (e) => e.stopPropagation();
+        urlDisplayContainer.querySelector('.btn-ignore-page').onclick = async (e) => {
+            e.stopPropagation();
+            await window.LinkyStorage.blockUrl(currentEditingUrl);
+            renderLinkInspector(document.getElementById('inspector-search')?.value.toLowerCase() || "");
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            drawer.classList.add('hidden'); // Close drawer on block
+        };
+        urlDisplayContainer.querySelector('.btn-ignore-site').onclick = async (e) => {
+            e.stopPropagation();
+            await window.LinkyStorage.blockDomain({ url: currentEditingUrl });
+            renderLinkInspector(document.getElementById('inspector-search')?.value.toLowerCase() || "");
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            drawer.classList.add('hidden'); // Close drawer on block
+        };
+    }
 
     const linkEl = document.getElementById('drawer-url-link');
     if (linkEl) {
@@ -474,36 +615,78 @@ async function runSemanticExperiment() {
         ambientScore = window.linkyAIEngine.TextEmbedder.cosineSimilarity(mockAmbient, mockPage);
     }
 
-    // 3. Blend & Apply Density Penalty (Aligned with sidepanel.js)
+    // 3. Blend & Apply Penalties (Aligned with sidepanel.js)
     let semanticScore = (focusScore * focusWeight) + (ambientScore * ambientWeight);
 
+    const poisonKeywords = await window.LinkyStorage.getPoisonKeywords();
     const metaText = (liveMeta.title || "") + (liveMeta.description || "") + (liveMeta.headings || "");
-    let densityMultiplier = 1.0;
-    let penaltyReason = "";
+    const metaLower = metaText.toLowerCase();
 
+    let densityMultiplier = 1.0;
+    let poisonMultiplier = 1.0;
+    let penaltyDetails = [];
+
+    // 1. Density Checks
     if (metaText.length < 60) {
         densityMultiplier *= 0.6;
-        penaltyReason = "Sparse Metadata";
+        penaltyDetails.push("Sparse Metadata (-40%)");
     }
-    if (!liveMeta.description) {
+    if (!liveMeta.description || liveMeta.description.trim().length === 0) {
         densityMultiplier *= 0.8;
-        penaltyReason = penaltyReason ? "Sparse + No Desc" : "No Description";
+        penaltyDetails.push("No Description (-20%)");
     }
 
-    const finalScore = semanticScore * densityMultiplier;
+    // 2. Poison Checks
+    for (const k of poisonKeywords) {
+        if (metaLower.includes(k.word.toLowerCase())) {
+            if (k.level === 'muted') {
+                poisonMultiplier = 0;
+                penaltyDetails.push(`Muted: contains "${k.word}"`);
+                break;
+            }
+            if (k.level === 'hard') {
+                poisonMultiplier *= 0.1;
+                penaltyDetails.push(`Major Noise: "${k.word}" (-90%)`);
+            }
+            if (k.level === 'soft') {
+                poisonMultiplier *= 0.3;
+                penaltyDetails.push(`Minor Noise: "${k.word}" (-70%)`);
+            }
+        }
+    }
+
+    // 3. Quality / Health Checks (Aligned with sidepanel.js)
+    const health = window.LinkyHealth.calculate(liveMeta);
+    const qualityScalar = Math.max(0.1, health.score / 100);
+
+    if (qualityScalar < 1.0) {
+        penaltyDetails.push(`Health Penalty: ${health.score}% result quality (-${Math.round((1 - qualityScalar) * 100)}%)`);
+    }
+
+    const finalScore = semanticScore * densityMultiplier * poisonMultiplier * qualityScalar;
 
     // 4. Update UI
     resultContainer.style.opacity = '1';
     const scoreValEl = document.getElementById('exp-score-val');
+    const penaltyIcon = document.getElementById('exp-penalty-icon');
+
     scoreValEl.textContent = `${Math.round(finalScore * 100)}%`;
 
     // Visual indicator of penalty
-    if (densityMultiplier < 1.0) {
+    const totalMultiplier = densityMultiplier * poisonMultiplier * qualityScalar;
+    if (totalMultiplier < 1.0) {
         scoreValEl.style.color = 'var(--danger)';
-        scoreValEl.title = `Penalty Applied: ${penaltyReason} (${Math.round((1 - densityMultiplier) * 100)}% reduction)`;
+        penaltyIcon.classList.remove('hidden');
+
+        const reduction = Math.round((1 - totalMultiplier) * 100);
+        const tooltip = `Penalty Applied: ${reduction}% total reduction\n• ` + penaltyDetails.join('\n• ');
+
+        scoreValEl.title = tooltip;
+        penaltyIcon.title = tooltip;
     } else {
         scoreValEl.style.color = 'var(--accent-blue)';
         scoreValEl.title = "";
+        penaltyIcon.classList.add('hidden');
     }
 
     const focusPct = Math.round(focusScore * 100);
@@ -760,4 +943,80 @@ function escapeHTML(str) {
             "'": '&#39;',
             '"': '&quot;'
         }[tag]));
+}
+// --- Poison Keywords Logic ---
+
+function setupPoisonInput() {
+    const input = document.getElementById('poison-input');
+    const levelSelect = document.getElementById('poison-level');
+    const btn = document.getElementById('add-poison-btn');
+
+    if (btn) {
+        btn.onclick = async () => {
+            const word = input.value.trim().toLowerCase();
+            const level = levelSelect.value;
+            if (!word) return;
+
+            const keywords = await window.LinkyStorage.getPoisonKeywords();
+            if (!keywords.find(k => k.word === word)) {
+                keywords.push({ word, level });
+                await window.LinkyStorage.savePoisonKeywords(keywords);
+                renderPoisonList(keywords);
+                input.value = '';
+                chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+            }
+        };
+    }
+}
+
+function renderPoisonList(keywords) {
+    const container = document.getElementById('poison-list');
+    if (!container) return;
+    container.innerHTML = '';
+
+    if (keywords.length === 0) {
+        container.innerHTML = `<div class="empty-state" style="padding: 20px; text-align: center; color: var(--text-dim);">No poison keywords set.</div>`;
+        return;
+    }
+
+    keywords.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'data-item poison-item';
+        div.innerHTML = `
+            <div class="data-info">
+                <div class="data-title">${escapeHTML(item.word)}</div>
+                <div class="data-url">Toxicity: ${item.level.charAt(0).toUpperCase() + item.level.slice(1)}</div>
+            </div>
+            <div class="poison-actions" style="display: flex; gap: 8px;">
+                <button class="btn-toggle-toxic" title="Change Toxicity Level" style="background: none; border: 1px solid var(--border); border-radius: 4px; color: var(--text); padding: 2px 8px; cursor: pointer; transition: all 0.2s;">☣️</button>
+                <button class="btn-remove" style="background: none; border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); padding: 2px 8px; cursor: pointer; transition: all 0.2s;">Remove</button>
+            </div>
+        `;
+
+        const toggleBtn = div.querySelector('.btn-toggle-toxic');
+        toggleBtn.onclick = async () => {
+            const levels = ['soft', 'hard', 'muted'];
+            const currentIndex = levels.indexOf(item.level);
+            item.level = levels[(currentIndex + 1) % levels.length];
+            await window.LinkyStorage.savePoisonKeywords(keywords);
+            renderPoisonList(keywords);
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+        };
+        // Add hover effects via JS since these are dynamic styles for now
+        toggleBtn.onmouseenter = () => toggleBtn.style.backgroundColor = 'var(--bg-card)';
+        toggleBtn.onmouseleave = () => toggleBtn.style.backgroundColor = 'transparent';
+
+        const removeBtn = div.querySelector('.btn-remove');
+        removeBtn.onclick = async () => {
+            const index = keywords.indexOf(item);
+            keywords.splice(index, 1);
+            await window.LinkyStorage.savePoisonKeywords(keywords);
+            renderPoisonList(keywords);
+            chrome.runtime.sendMessage({ action: "settings-updated" }).catch(() => { });
+        };
+        removeBtn.onmouseenter = () => { removeBtn.style.backgroundColor = 'var(--danger)'; removeBtn.style.color = 'white'; };
+        removeBtn.onmouseleave = () => { removeBtn.style.backgroundColor = 'transparent'; removeBtn.style.color = 'var(--danger)'; };
+
+        container.appendChild(div);
+    });
 }

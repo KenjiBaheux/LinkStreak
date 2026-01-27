@@ -41,6 +41,7 @@
                 <div class="horizontal-nav">
                     <a class="sub-nav-item active" data-target="ranking">Ranking</a>
                     <a class="sub-nav-item" data-target="patterns">Patterns</a>
+                    <a class="sub-nav-item" data-target="poison">Poison</a>
                     <a class="sub-nav-item" data-target="ignored">Blocklist</a>
                 </div>
 
@@ -128,11 +129,28 @@
 
                 <section id="patterns" class="settings-section">
                     <div class="section-title">Ignored Patterns</div>
-                    <div class="control-group pattern-add-box">
+                    <div class="control-group">
                         <input type="text" id="pattern-input" placeholder="e.g. *example.com*">
                         <button id="add-pattern-btn" class="btn-primary">Add</button>
                     </div>
                     <div id="patterns-list" class="data-list"></div>
+                </section>
+
+                <section id="poison" class="settings-section">
+                    <div class="section-title">Poison Keywords</div>
+                    <p class="field-subtext">Penalize links containing specific noise words to avoid irrelevant semantic
+                        matches.</p>
+
+                    <div class="control-group">
+                        <input type="text" id="poison-input" placeholder="e.g. login, sign in...">
+                        <select id="poison-level">
+                            <option value="soft">Minor Noise (0.3x)</option>
+                            <option value="hard">Major Noise (0.1x)</option>
+                            <option value="muted">Muted (0.0x)</option>
+                        </select>
+                        <button id="add-poison-btn" class="btn-primary">Add</button>
+                    </div>
+                    <div id="poison-list" class="data-list"></div>
                 </section>
 
                 <section id="ignored" class="settings-section">
@@ -156,10 +174,22 @@
                         <input type="text" id="inspector-search"
                             placeholder="Filter by title, url:domain, or h1:target...">
                     </div>
-                    <label class="checkbox-container"
-                        style="margin: 0; white-space: nowrap; font-size: 12px; color: var(--text-dim);">
-                        <input type="checkbox" id="show-ignored-toggle"> Show Ignored
-                    </label>
+                    <div class="toolbar-filters">
+                        <select id="inspector-source-filter" class="inspector-select">
+                            <option value="all">All Sources</option>
+                            <option value="tabs">Active Tabs</option>
+                            <option value="history">History</option>
+                            <option value="bookmarks">Bookmarks</option>
+                        </select>
+                        <label class="checkbox-container" id="inspector-local-container"
+                            style="margin: 0; white-space: nowrap; font-size: 12px; color: var(--text-dim);">
+                            <input type="checkbox" id="inspector-local-only"> Local Only
+                        </label>
+                        <label class="checkbox-container"
+                            style="margin: 0; white-space: nowrap; font-size: 12px; color: var(--text-dim);">
+                            <input type="checkbox" id="show-ignored-toggle"> Show Ignored
+                        </label>
+                    </div>
                     <button id="refresh-inspector" class="btn-refresh">Refresh Index</button>
                 </div>
 
@@ -169,9 +199,13 @@
                             <tr>
                                 <th class="col-status sortable" data-sort="status">Status <span
                                         class="sort-icon"></span></th>
+                                <th class="col-last-visited sortable" data-sort="lastVisitTime">Last Visited <span
+                                        class="sort-icon"></span></th>
                                 <th class="col-title sortable" data-sort="title">Page Title <span
                                         class="sort-icon"></span></th>
                                 <th class="col-url sortable" data-sort="url">URL <span class="sort-icon"></span></th>
+                                <th class="col-visits sortable" data-sort="visitCount">Visits <span
+                                        class="sort-icon"></span></th>
                                 <th class="col-health sortable" data-sort="health">Score <span class="sort-icon"></span>
                                 </th>
                             </tr>
@@ -191,7 +225,18 @@
                 <button id="close-drawer">×</button>
             </div>
             <div class="drawer-content">
-                <a id="drawer-url-link" target="_blank" class="url-display-link">https://example.com</a>
+                <div class="url-display-container">
+                    <a id="drawer-url-link" target="_blank" class="url-display-link">https://example.com</a>
+                    <div class="split-ignore-container visible-always">
+                        <button class="feedback-btn btn-ignore-main" title="Ignore options">🚫</button>
+                        <div class="split-ignore-menu">
+                            <button class="ignore-action-btn btn-ignore-site"
+                                title="Ignore all results from this site">🌐</button>
+                            <button class="ignore-action-btn btn-ignore-page"
+                                title="Never show this specific page again">📄</button>
+                        </div>
+                    </div>
+                </div>
 
                 <div class="drawer-section">
                     <label>Editable Metadata</label>
@@ -230,7 +275,10 @@
                     <div id="exp-result-container" class="exp-result hidden">
                         <div class="exp-score-row">
                             <span class="exp-score-label">Semantic Score</span>
-                            <span id="exp-score-val" class="exp-score-val">--%</span>
+                            <div class="exp-score-group">
+                                <span id="exp-score-val" class="exp-score-val">--%</span>
+                                <span id="exp-penalty-icon" class="status-icon penalty-icon hidden" title="">⚠</span>
+                            </div>
                         </div>
                         <div class="exp-breakdown">
                             <div class="breakdown-bar-container">
