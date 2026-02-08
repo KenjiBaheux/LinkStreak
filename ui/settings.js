@@ -527,6 +527,30 @@ function openInspectorDrawer(url, meta) {
         `;
         checklist.appendChild(li);
     });
+
+    // Vector Heatmap Visualization
+    const canvas = document.getElementById('vector-heatmap');
+    if (canvas && window.LinkyVisualizer && window.linkyAIEngine) {
+        // Clear while loading
+        const ctx = canvas.getContext('2d');
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#1e293b'; // var(--bg-card)
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Loading signature...', canvas.width / 2, canvas.height / 2);
+
+        // Fetch & Render
+        window.linkyAIEngine.getEmbedding(meta).then(vector => {
+            if (vector) {
+                const dims = window.LinkyVisualizer.renderHeatmap(canvas, vector);
+                const badge = document.getElementById('vector-dims');
+                if (badge && dims) badge.textContent = dims;
+            } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillText('No signature available', canvas.width / 2, canvas.height / 2);
+            }
+        });
+    }
 }
 
 async function handleSaveMetadata() {

@@ -262,6 +262,22 @@
                 </div>
 
                 <div class="drawer-section">
+                    <label>Vector Signature</label>
+                    <div class="vector-inspector">
+                        <div class="vector-header">
+                            <span class="vector-title">Embedding Heatmap</span>
+                            <span id="vector-dims" class="vector-badge">-- x --</span>
+                        </div>
+                        <canvas id="vector-heatmap" width="256" height="128"></canvas>
+                        <div class="vector-legend">
+                            <span>Negative (-)</span>
+                            <div class="gradient-bar"></div>
+                            <span>Positive (+)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="drawer-section">
                     <label>Semantic Relevance Experiment</label>
                     <div class="form-group">
                         <span class="field-label">Focus Context (Primary)</span>
@@ -303,6 +319,7 @@
     <script src="../lib/ai_engine.js"></script>
     <script src="../lib/metadata_health.js"></script>
     <script src="../modules/storage.js"></script>
+    <script src="visualizer.js"></script>
     <script src="settings.js"></script>
 </body>
 
