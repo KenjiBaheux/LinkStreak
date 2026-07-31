@@ -4,7 +4,19 @@ let activeContext = { text: "", weight: 30 };
 
 document.addEventListener('DOMContentLoaded', async () => {
     // 1. AI Engine Warmup
-    if (window.linkyAIEngine) await window.linkyAIEngine.init();
+    let aiReady = false;
+    if (window.linkyAIEngine) {
+        aiReady = await window.linkyAIEngine.init();
+    }
+
+    if (!aiReady) {
+        const errorMsg = window.linkyAIEngine?.lastError || "Semantic Embedder API not found. Ensure Chrome flags are enabled.";
+        if (window.linkyAIEngine?.lastErrorType === "downloadable") {
+            showAIDownloadTrigger(errorMsg);
+        } else {
+            showAIFailureGuidance(errorMsg);
+        }
+    }
 
     // 2. Initial Data Load
     const lastData = await chrome.runtime.sendMessage({ action: "get-last-selection" });
@@ -198,6 +210,17 @@ async function triggerUnifiedSearch() {
 // --- CORE LOGIC ---
 async function performSearch(query, ambient = null, params = null) {
     const resultsList = document.getElementById('results-list');
+
+    if (!window.linkyAIEngine || !window.linkyAIEngine.embedder) {
+        const errorMsg = window.linkyAIEngine?.lastError || "Semantic Embedder API not found. Ensure Chrome flags are enabled.";
+        if (window.linkyAIEngine?.lastErrorType === "downloadable") {
+            showAIDownloadTrigger(errorMsg);
+        } else {
+            showAIFailureGuidance(errorMsg);
+        }
+        return;
+    }
+
     if (!query?.trim()) {
         resultsList.innerHTML = `<div class="empty-state"><p>Select text to begin.</p></div>`;
         return;
@@ -583,5 +606,94 @@ async function handlePageIndexing(request) {
                 description: request.metadata.description
             });
         }
+    }
+}
+
+function showAIFailureGuidance(errorMsg = "") {
+    const resultsList = document.getElementById('results-list');
+    if (!resultsList) return;
+
+    resultsList.innerHTML = `
+        <div class="ai-error-guidance" style="padding: 16px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: var(--radius); margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--text-main);">
+            <h3 style="margin-top: 0; color: #ef4444; font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                ⚠️ Built-in AI/Semantic Embedder is Disabled
+            </h3>
+            <p style="margin-bottom: 12px;">
+                LinkStreak requires Chrome's experimental <strong>Semantic Embedder API</strong> to generate text embeddings locally. Without this, semantic recommendations cannot function.
+            </p>
+            <p style="margin-bottom: 8px; font-weight: bold;">To enable this feature:</p>
+            <ol style="margin-top: 0; margin-bottom: 16px; padding-left: 20px; color: var(--text-dim);">
+                <li style="margin-bottom: 8px;">
+                    Open a new tab and go to:<br>
+                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://flags/#optimization-guide-on-device-model</code><br>
+                    Set to <strong>Enabled BypassPerfRequirement</strong> (or Enabled).
+                </li>
+                <li style="margin-bottom: 8px;">
+                    Go to:<br>
+                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://flags/#semantic-embedder-api</code><br>
+                    Set to <strong>Enabled</strong>.
+                </li>
+                <li style="margin-bottom: 8px;">
+                    Go to:<br>
+                    <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://components/</code><br>
+                    Under <strong>Optimization Guide On Device Model</strong>, click <strong>Check for Update</strong> to ensure the base model is fully downloaded.
+                </li>
+                <li>Relaunch Chrome to apply the changes.</li>
+            </ol>
+            ${errorMsg ? `<div style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; color: var(--text-dim); font-size: 11px; overflow-x: auto; max-width: 100%;">Error details: ${escapeHTML(errorMsg)}</div>` : ''}
+        </div>
+    `;
+}
+
+function showAIDownloadTrigger(errorMsg = "") {
+    const resultsList = document.getElementById('results-list');
+    if (!resultsList) return;
+
+    resultsList.innerHTML = `
+        <div class="ai-download-container" style="padding: 16px; background: rgba(59, 130, 246, 0.1); border: 1px solid var(--accent-blue); border-radius: var(--radius); margin-top: 12px; font-size: 13px; line-height: 1.5; color: var(--text-main);">
+            <h3 style="margin-top: 0; color: var(--accent-cyan); font-size: 15px; display: flex; align-items: center; gap: 8px;">
+                📥 Local AI Model Download Required
+            </h3>
+            <p style="margin-bottom: 16px;">
+                Chrome's Semantic Embedder is available on your device, but the local model needs to be downloaded before you can get semantic recommendations.
+            </p>
+            <button id="btn-trigger-ai-download" class="btn-primary" style="width: 100%; padding: 10px; border-radius: 8px; font-weight: bold; background: var(--accent-blue); color: white; border: none; cursor: pointer; transition: background 0.2s;">
+                Download local model
+            </button>
+            <div id="ai-download-progress-container" class="hidden" style="margin-top: 16px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; color: var(--text-dim);">
+                    <span>Downloading local model...</span>
+                    <span id="ai-download-pct">0%</span>
+                </div>
+                <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden;">
+                    <div id="ai-download-bar" style="background: var(--accent-cyan); width: 0%; height: 100%; transition: width 0.1s ease-out;"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    const btn = document.getElementById('btn-trigger-ai-download');
+    if (btn) {
+        btn.onclick = async () => {
+            btn.style.display = 'none';
+            const progressContainer = document.getElementById('ai-download-progress-container');
+            if (progressContainer) progressContainer.classList.remove('hidden');
+
+            window.addEventListener('ai-download-progress', (e) => {
+                const pct = e.detail.percentage;
+                const bar = document.getElementById('ai-download-bar');
+                const pctText = document.getElementById('ai-download-pct');
+                if (bar) bar.style.width = `${pct}%`;
+                if (pctText) pctText.textContent = `${pct}%`;
+            });
+
+            const ready = await window.linkyAIEngine.init(true);
+            if (ready) {
+                triggerUnifiedSearch();
+            } else {
+                const err = window.linkyAIEngine?.lastError || "Failed to download model.";
+                showAIFailureGuidance(err);
+            }
+        };
     }
 }

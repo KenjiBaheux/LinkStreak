@@ -1,6 +1,18 @@
 // settings.js - Settings Logic
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Warm up and check AI availability
+    if (window.linkyAIEngine) {
+        const aiReady = await window.linkyAIEngine.init();
+        if (!aiReady) {
+            if (window.linkyAIEngine.lastErrorType === "downloadable") {
+                showAIDownloadTriggerSettings(window.linkyAIEngine.lastError);
+            } else {
+                showAIFailureWarningSettings(window.linkyAIEngine.lastError);
+            }
+        }
+    }
+
     // 1. Load Data
     const blockedUrls = await window.LinkyStorage.getBlockedUrls();
     const patterns = await window.LinkyStorage.getIgnoredPatterns();
@@ -469,7 +481,7 @@ async function renderLinkInspector(filterQuery = "") {
 }
 
 
-function openInspectorDrawer(url, meta) {
+async function openInspectorDrawer(url, meta) {
     currentEditingUrl = url;
     isDrawerDirty = false; // Reset dirty state on open/refresh
     const drawer = document.getElementById('inspector-drawer');
@@ -511,7 +523,16 @@ function openInspectorDrawer(url, meta) {
     document.getElementById('exp-result-container').classList.add('hidden');
 
     // Warm up AI if needed
-    if (window.linkyAIEngine) window.linkyAIEngine.init();
+    if (window.linkyAIEngine) {
+        const aiReady = await window.linkyAIEngine.init();
+        if (!aiReady) {
+            if (window.linkyAIEngine.lastErrorType === "downloadable") {
+                showAIDownloadTriggerSettings(window.linkyAIEngine.lastError);
+            } else {
+                showAIFailureWarningSettings(window.linkyAIEngine.lastError);
+            }
+        }
+    }
 
     const health = window.LinkyHealth.calculate(meta);
     const checklist = document.getElementById('health-checklist');
@@ -1043,4 +1064,112 @@ function renderPoisonList(keywords) {
 
         container.appendChild(div);
     });
+}
+
+function escapeHTML(str) {
+    if (!str) return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+}
+
+function showAIFailureWarningSettings(errorMsg = "") {
+    const content = document.querySelector('.settings-content');
+    if (!content) return;
+
+    // Check if warning banner already exists
+    if (document.querySelector('.ai-error-guidance-settings')) return;
+
+    const banner = document.createElement('div');
+    banner.className = 'ai-error-guidance-settings';
+    banner.style.cssText = 'padding: 16px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); border-radius: var(--radius); margin-bottom: 24px; font-size: 14px; line-height: 1.5; color: var(--text-main);';
+    banner.innerHTML = `
+        <h3 style="margin-top: 0; color: #ef4444; font-size: 16px; display: flex; align-items: center; gap: 8px;">
+            ⚠️ Built-in AI/Semantic Embedder is Disabled
+        </h3>
+        <p style="margin-bottom: 12px;">
+            LinkStreak requires Chrome's experimental <strong>Semantic Embedder API</strong> to generate text embeddings locally on your device. Without this, the local vector similarity calculations and Link Inspector experiments cannot function.
+        </p>
+        <p style="margin-bottom: 8px; font-weight: bold;">To enable this feature:</p>
+        <ol style="margin-top: 0; margin-bottom: 16px; padding-left: 20px; color: var(--text-dim);">
+            <li style="margin-bottom: 8px;">
+                Open a new tab and go to:<br>
+                <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://flags/#optimization-guide-on-device-model</code><br>
+                Set to <strong>Enabled BypassPerfRequirement</strong> (or Enabled).
+            </li>
+            <li style="margin-bottom: 8px;">
+                Go to:<br>
+                <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://flags/#semantic-embedder-api</code><br>
+                Set to <strong>Enabled</strong>.
+            </li>
+            <li style="margin-bottom: 8px;">
+                Go to:<br>
+                <code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; user-select: all; display: inline-block; margin-top: 4px;">chrome://components/</code><br>
+                Under <strong>Optimization Guide On Device Model</strong>, click <strong>Check for Update</strong> to ensure the base model is fully downloaded.
+            </li>
+            <li>Relaunch Chrome to apply the changes.</li>
+        </ol>
+        ${errorMsg ? `<div style="font-family: monospace; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 4px; color: var(--text-dim); font-size: 12px; overflow-x: auto; max-width: 100%;">Error details: ${escapeHTML(errorMsg)}</div>` : ''}
+    `;
+    content.insertBefore(banner, content.firstChild);
+}
+
+function showAIDownloadTriggerSettings(errorMsg = "") {
+    const content = document.querySelector('.settings-content');
+    if (!content) return;
+
+    if (document.querySelector('.ai-download-settings-banner')) return;
+
+    const banner = document.createElement('div');
+    banner.className = 'ai-download-settings-banner';
+    banner.style.cssText = 'padding: 16px; background: rgba(59, 130, 246, 0.15); border: 1px solid var(--accent-blue); border-radius: var(--radius); margin-bottom: 24px; font-size: 14px; line-height: 1.5; color: var(--text-main);';
+    banner.innerHTML = `
+        <h3 style="margin-top: 0; color: var(--accent-cyan); font-size: 16px; display: flex; align-items: center; gap: 8px;">
+            📥 Local AI Model Download Required
+        </h3>
+        <p style="margin-bottom: 16px;">
+            Chrome's Semantic Embedder is available on your device, but the local model needs to be downloaded before local vector similarity calculations can function.
+        </p>
+        <button id="btn-trigger-ai-download-settings" class="btn-primary" style="padding: 8px 16px; border-radius: 8px; font-weight: bold; background: var(--accent-blue); color: white; border: none; cursor: pointer; transition: background 0.2s;">
+            Download local model
+        </button>
+        <div id="ai-download-progress-container-settings" class="hidden" style="margin-top: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 12px; color: var(--text-dim);">
+                <span>Downloading local model...</span>
+                <span id="ai-download-pct-settings">0%</span>
+            </div>
+            <div style="background: rgba(255,255,255,0.1); height: 8px; border-radius: 4px; overflow: hidden; width: 100%;">
+                <div id="ai-download-bar-settings" style="background: var(--accent-cyan); width: 0%; height: 100%; transition: width 0.1s ease-out;"></div>
+            </div>
+        </div>
+    `;
+
+    content.insertBefore(banner, content.firstChild);
+
+    const btn = document.getElementById('btn-trigger-ai-download-settings');
+    if (btn) {
+        btn.onclick = async () => {
+            btn.style.display = 'none';
+            const progressContainer = document.getElementById('ai-download-progress-container-settings');
+            if (progressContainer) progressContainer.classList.remove('hidden');
+
+            window.addEventListener('ai-download-progress', (e) => {
+                const pct = e.detail.percentage;
+                const bar = document.getElementById('ai-download-bar-settings');
+                const pctText = document.getElementById('ai-download-pct-settings');
+                if (bar) bar.style.width = `${pct}%`;
+                if (pctText) pctText.textContent = `${pct}%`;
+            });
+
+            const ready = await window.linkyAIEngine.init(true);
+            if (ready) {
+                banner.remove();
+                const searchInput = document.getElementById('inspector-search');
+                renderLinkInspector(searchInput?.value.toLowerCase() || "");
+            } else {
+                banner.remove();
+                showAIFailureWarningSettings(window.linkyAIEngine.lastError);
+            }
+        };
+    }
 }
