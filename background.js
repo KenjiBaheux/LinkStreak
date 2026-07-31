@@ -1,4 +1,10 @@
 // background.js - Central State Manager
+try {
+  importScripts('lib/ai_engine.js');
+} catch (e) {
+  console.error('[LinkStreak] Service Worker importScripts failed:', e);
+}
+
 const VECTOR_CACHE_KEY = 'linky_vector_cache';
 const QUEUE_KEY = 'activeQueue';
 let lastSelection = null;
@@ -252,12 +258,24 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
         const contentStr = `${tab.title}|${metadata.description}|${metadata.headings}`;
         const contentHash = hashCode(contentStr);
 
+        // Pre-embed directly in the background!
+        let embedding = null;
+        if (self.linkyAIEngine) {
+          await self.linkyAIEngine.init();
+          embedding = await self.linkyAIEngine.getEmbedding({
+            title: tab.title,
+            description: metadata.description,
+            headings: metadata.headings
+          });
+        }
+
         // PERSIST the metadata to the cache and WAIT for it to finish
         await saveToVectorCache(tab.url, {
           title: tab.title,
           description: metadata.description,
           headings: metadata.headings,
-          contentHash
+          contentHash,
+          embedding: embedding || undefined
         });
 
         chrome.runtime.sendMessage({
@@ -265,7 +283,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
           url: tab.url,
           title: tab.title,
           contentHash,
-          metadata
+          metadata,
+          embedding: embedding || undefined
         }).catch(() => { });
       }
     } catch (e) {
@@ -285,3 +304,24 @@ function hashCode(str) {
 }
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
+
+// 7. Bookmarks Listener (Pre-cache new bookmarks)
+chrome.bookmarks.onCreated.addListener(async (id, bookmark) => {
+  if (bookmark.url && bookmark.url.startsWith('http')) {
+    console.log(`[LinkStreak] Bookmark created, pre-embedding: ${bookmark.url}`);
+    let embedding = null;
+    if (self.linkyAIEngine) {
+      await self.linkyAIEngine.init();
+      embedding = await self.linkyAIEngine.getEmbedding({
+        title: bookmark.title || "",
+        description: "",
+        headings: ""
+      });
+    }
+
+    await saveToVectorCache(bookmark.url, {
+      title: bookmark.title || "",
+      embedding: embedding || undefined
+    });
+  }
+});
